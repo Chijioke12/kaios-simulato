@@ -14,6 +14,7 @@ import java.util.Base64;
 public class MainActivity extends Activity {
     private WebView webView;
     private TextView keyLogger, defaultText;
+    private ScrollView logScroll;
     private static final int FILE_PICKER_CODE = 101;
 
     @Override
@@ -23,19 +24,18 @@ public class MainActivity extends Activity {
 
         webView = findViewById(R.id.webView);
         keyLogger = findViewById(R.id.keyLogger);
+        logScroll = findViewById(R.id.logScroll);
         defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setAllowFileAccess(true);
-        
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 defaultText.setVisibility(View.GONE);
-                log("Loaded: " + url);
+                log("URL Loaded: " + url);
             }
         });
 
@@ -46,12 +46,12 @@ public class MainActivity extends Activity {
         });
 
         findViewById(R.id.btnUpload).setOnClickListener(v -> {
-            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-            intent.setType("text/html");
-            startActivityForResult(intent, FILE_PICKER_CODE);
+            Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+            i.setType("text/html");
+            startActivityForResult(i, FILE_PICKER_CODE);
         });
 
-        // --- KEY MAPPINGS ---
+        // Key Mappings
         map(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
         map(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
         map(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
@@ -59,12 +59,9 @@ public class MainActivity extends Activity {
         map(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
         map(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
         map(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
-        
-        // Red Button (End) mapped to Backspace
         map(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
-        map(R.id.btnCall, "Call", 10, KeyEvent.KEYCODE_CALL);
-        
-        // Full Numpad
+
+        // Numpad 0-9, *, #
         map(R.id.btn1, "1", 49, KeyEvent.KEYCODE_1);
         map(R.id.btn2, "2", 50, KeyEvent.KEYCODE_2);
         map(R.id.btn3, "3", 51, KeyEvent.KEYCODE_3);
@@ -79,53 +76,34 @@ public class MainActivity extends Activity {
         map(R.id.btnHash, "#", 35, KeyEvent.KEYCODE_POUND);
     }
 
-    private void map(int resId, String name, int jsCode, int androidCode) {
-        View btn = findViewById(resId);
-        if (btn == null) return;
-        btn.setOnClickListener(v -> {
+    private void map(int id, String name, int js, int android) {
+        View v = findViewById(id);
+        if (v == null) return;
+        v.setOnClickListener(view -> {
             log("Key: " + name);
-            // Inject JavaScript Keyboard Events
-            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {key:'" + name + "', keyCode:" + jsCode + ", bubbles:true}));" +
-                        "window.dispatchEvent(new KeyboardEvent('keyup', {key:'" + name + "', keyCode:" + jsCode + ", bubbles:true}));";
-            webView.evaluateJavascript(js, null);
-            
-            // Dispatch Native Android Key Events
-            webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, androidCode));
-            webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, androidCode));
+            String script = "window.dispatchEvent(new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true}));";
+            webView.evaluateJavascript(script, null);
+            webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, android));
+            webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, android));
         });
     }
 
-    private void log(String msg) {
-        keyLogger.append("\n> " + msg);
-        // Basic scroll logic for logger
-        keyLogger.post(() -> {
-            final int scrollAmount = keyLogger.getLayout().getLineTop(keyLogger.getLineCount()) - keyLogger.getHeight();
-            if (scrollAmount > 0) keyLogger.scrollTo(0, scrollAmount);
-        });
+    private void log(String m) {
+        keyLogger.append("\n> " + m);
+        logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == FILE_PICKER_CODE && resultCode == RESULT_OK && data != null) {
+    protected void onActivityResult(int req, int res, Intent d) {
+        if (req == FILE_PICKER_CODE && res == RESULT_OK && d != null) {
             try {
-                InputStream is = getContentResolver().openInputStream(data.getData());
-                ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                byte[] b = new byte[1024];
-                int len;
-                while ((len = is.read(b)) != -1) bos.write(b, 0, len);
-                String encoded = Base64.getEncoder().encodeToString(bos.toByteArray());
-                webView.loadUrl("data:text/html;base64," + encoded);
+                InputStream is = getContentResolver().openInputStream(d.getData());
+                byte[] b = new byte[is.available()];
+                is.read(b);
                 is.close();
-            } catch (Exception e) { log("Upload Failed"); }
-        }
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
+                String base64 = Base64.getEncoder().encodeToString(b);
+                webView.loadUrl("data:text/html;base64," + base64);
+            } catch (Exception e) { log("Upload Error"); }
         }
     }
 }
