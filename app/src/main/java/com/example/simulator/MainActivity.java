@@ -38,12 +38,15 @@ public class MainActivity extends Activity {
         defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
+        // WEBVIEW SETUP
         webView.setBackgroundColor(0xFF1E1E1E);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setFocusable(true);
-        s.setFocusableInTouchMode(true);
+        
+        // FIX: Focusable methods belong to the View (webView), not WebSettings (s)
+        webView.setFocusable(true);
+        webView.setFocusableInTouchMode(true);
         
         webView.setWebViewClient(new WebViewClient());
 
@@ -52,7 +55,7 @@ public class MainActivity extends Activity {
             if(!url.startsWith("http")) url = "http://" + url;
             webView.loadUrl(url);
             defaultText.setVisibility(View.GONE);
-            webView.requestFocus(); // Essential for games
+            webView.requestFocus(); 
         });
 
         findViewById(R.id.btnUpload).setOnClickListener(v -> {
@@ -69,7 +72,7 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // MAP KEYS (Name, JS_Code, Android_Code)
+        // MAP KEYS
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
@@ -90,27 +93,41 @@ public class MainActivity extends Activity {
     private void setupKey(int id, String name, int jsCode, int androidCode) {
         View v = findViewById(id);
         if (v == null) return;
-        v.setOnTouchListener((view, event) -> {
-            if(event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.setPressed(true);
-                v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                trigger(name, jsCode, androidCode);
-            } else if(event.getAction() == MotionEvent.ACTION_UP) {
-                v.setPressed(false);
+        v.setOnTouchListener(new View.OnTouchListener() {
+            private boolean isFirstPress = true;
+            private Runnable action = new Runnable() {
+                @Override public void run() {
+                    trigger(name, jsCode, androidCode);
+                    long delay = isFirstPress ? INITIAL_DELAY : REPEAT_INTERVAL;
+                    isFirstPress = false;
+                    repeatHandler.postDelayed(this, delay);
+                }
+            };
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                switch(event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.setPressed(true);
+                        v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                        isFirstPress = true;
+                        repeatHandler.post(action);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        repeatHandler.removeCallbacks(action);
+                        return true;
+                }
+                return false;
             }
-            return true;
         });
     }
 
     private void trigger(String name, int js, int ak) {
         log("Key: " + name);
-        // INJECT JS EVENT (Crucial for Games)
         String script = "var e = new KeyboardEvent('keydown', {key:'"+name+"', keyCode:"+js+", bubbles:true});" +
-                        "window.dispatchEvent(e);" +
-                        "document.dispatchEvent(e);";
+                        "window.dispatchEvent(e); document.dispatchEvent(e);";
         webView.evaluateJavascript(script, null);
-
-        // DISPATCH NATIVE EVENT
         webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
         webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
     }
