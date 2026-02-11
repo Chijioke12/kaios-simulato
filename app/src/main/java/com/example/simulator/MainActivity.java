@@ -15,7 +15,6 @@ public class MainActivity extends Activity {
     private WebView webView;
     private TextView keyLogger, defaultText;
     private ScrollView logScroll;
-    private static final int FILE_PICKER_CODE = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,38 +25,19 @@ public class MainActivity extends Activity {
         keyLogger = findViewById(R.id.keyLogger);
         logScroll = findViewById(R.id.logScroll);
         defaultText = findViewById(R.id.defaultText);
-        EditText urlInput = findViewById(R.id.urlInput);
 
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         webView.setWebViewClient(new WebViewClient());
 
-        findViewById(R.id.btnLoad).setOnClickListener(v -> {
-            String url = urlInput.getText().toString();
-            if(!url.startsWith("http")) url = "http://" + url;
-            webView.loadUrl(url);
-            defaultText.setVisibility(View.GONE);
-        });
-
         findViewById(R.id.btnUpload).setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_GET_CONTENT);
             i.setType("text/html");
-            startActivityForResult(i, FILE_PICKER_CODE);
+            startActivityForResult(i, 101);
         });
 
-        // 1. Navigation & System
-        map(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
-        map(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
-        map(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
-        map(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
-        map(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
-        map(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
-        map(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
-        map(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
-        map(R.id.btnCall, "Call", 10, KeyEvent.KEYCODE_CALL);
-
-        // 2. Full Numpad (Every button mapped individually)
+        // Map every button individually to ensure IDs are correct
         map(R.id.btn1, "1", 49, KeyEvent.KEYCODE_1);
         map(R.id.btn2, "2", 50, KeyEvent.KEYCODE_2);
         map(R.id.btn3, "3", 51, KeyEvent.KEYCODE_3);
@@ -70,15 +50,21 @@ public class MainActivity extends Activity {
         map(R.id.btn0, "0", 48, KeyEvent.KEYCODE_0);
         map(R.id.btnStar, "*", 42, KeyEvent.KEYCODE_STAR);
         map(R.id.btnHash, "#", 35, KeyEvent.KEYCODE_POUND);
+        
+        map(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
+        map(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
+        map(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
+        map(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
+        map(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
+        map(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
     }
 
     private void map(int id, String name, int js, int android) {
-        View v = findViewById(id);
-        if (v != null) {
-            v.setOnClickListener(view -> {
-                log("Pressed: " + name);
-                String script = "window.dispatchEvent(new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true}));";
-                webView.evaluateJavascript(script, null);
+        Button b = findViewById(id);
+        if (b != null) {
+            b.setOnClickListener(v -> {
+                log("Key: " + name);
+                webView.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true}));", null);
                 webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, android));
                 webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, android));
             });
@@ -92,16 +78,15 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int req, int res, Intent d) {
-        if (req == FILE_PICKER_CODE && res == RESULT_OK && d != null) {
+        if (req == 101 && res == RESULT_OK && d != null) {
             try {
                 InputStream is = getContentResolver().openInputStream(d.getData());
                 byte[] b = new byte[is.available()];
                 is.read(b);
                 is.close();
-                String base64 = Base64.getEncoder().encodeToString(b);
-                webView.loadUrl("data:text/html;base64," + base64);
+                webView.loadUrl("data:text/html;base64," + Base64.getEncoder().encodeToString(b));
                 defaultText.setVisibility(View.GONE);
-            } catch (Exception e) { log("Upload Error"); }
+            } catch (Exception e) { log("Error"); }
         }
     }
 }
