@@ -17,6 +17,9 @@ public class MainActivity extends Activity {
     private WebView webView;
     private TextView keyLogger, appTitle, defaultText;
     private ScrollView logScroll, rootLayout;
+    private Handler repeatHandler = new Handler();
+    private static final int INITIAL_DELAY = 500; // Delay before repeat starts
+    private static final int REPEAT_INTERVAL = 100; // Speed of fast navigation
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,45 +63,75 @@ public class MainActivity extends Activity {
             startActivityForResult(i, 101);
         });
 
+        findViewById(R.id.btnClear).setOnClickListener(v -> {
+            webView.loadUrl("about:blank");
+            defaultText.setVisibility(View.VISIBLE);
+            log("Screen Cleared");
+        });
+
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- FIXED KEY MAPPINGS (4 ARGUMENTS EACH) ---
+        // --- FAST NAVIGATION KEYS (DPAD & BACKSPACE) ---
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
         setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
-        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
         setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
+
+        // --- STANDARD KEYS ---
+        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
         setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
         setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
         setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL);
 
-        // Numpad Loop Fixed
+        // Numpad Loop
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         String[] names = {"0","1","2","3","4","5","6","7","8","9","*","#"};
-        int[] jsCodes = {48,49,50,51,52,53,54,55,56,57,42,35};
         int[] akCodes = {7,8,9,10,11,12,13,14,15,16,17,18};
 
         for(int i=0; i<ids.length; i++) {
-            setupKey(ids[i], names[i], jsCodes[i], akCodes[i]);
+            setupKey(ids[i], names[i], 0, akCodes[i]);
         }
     }
 
-    private void setupKey(int id, String name, int js, int ak) {
-        View v = findViewById(id);
+    private void setupKey(int id, final String name, final int js, final int ak) {
+        final View v = findViewById(id);
         if (v == null) return;
-        v.setOnTouchListener((view, event) -> {
-            if(event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.setPressed(true);
-                log("Key: " + name);
-                // We use only native events to prevent double-firing
-                webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
-                webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
-            } else if(event.getAction() == MotionEvent.ACTION_UP) {
-                v.setPressed(false);
+
+        v.setOnTouchListener(new View.OnTouchListener() {
+            private boolean isFirstPress = true;
+            private Runnable action = new Runnable() {
+                @Override public void run() {
+                    trigger(name, ak);
+                    long delay = isFirstPress ? INITIAL_DELAY : REPEAT_INTERVAL;
+                    isFirstPress = false;
+                    repeatHandler.postDelayed(this, delay);
+                }
+            };
+
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                switch(event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.setPressed(true);
+                        isFirstPress = true;
+                        repeatHandler.post(action);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        repeatHandler.removeCallbacks(action);
+                        return true;
+                }
+                return false;
             }
-            return true;
         });
+    }
+
+    private void trigger(String name, int ak) {
+        log("Key: " + name);
+        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
+        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
     }
 
     private void log(String m) {
@@ -117,9 +150,8 @@ public class MainActivity extends Activity {
             OutputStream os = getContentResolver().openOutputStream(getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv));
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
-            log("Saved to Gallery!");
-            Toast.makeText(this, "Screenshot Saved!", Toast.LENGTH_SHORT).show();
-        } catch (Exception e) { log("Error Saving"); }
+            log("Saved Screenshot!");
+        } catch (Exception e) {}
     }
 
     @Override
