@@ -31,18 +31,13 @@ public class MainActivity extends Activity {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                defaultText.setVisibility(View.GONE);
-                log("URL Loaded: " + url);
-            }
-        });
+        webView.setWebViewClient(new WebViewClient());
 
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString();
             if(!url.startsWith("http")) url = "http://" + url;
             webView.loadUrl(url);
+            defaultText.setVisibility(View.GONE);
         });
 
         findViewById(R.id.btnUpload).setOnClickListener(v -> {
@@ -51,7 +46,7 @@ public class MainActivity extends Activity {
             startActivityForResult(i, FILE_PICKER_CODE);
         });
 
-        // Key Mappings
+        // 1. Navigation & System
         map(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
         map(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
         map(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
@@ -60,8 +55,9 @@ public class MainActivity extends Activity {
         map(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
         map(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
         map(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
+        map(R.id.btnCall, "Call", 10, KeyEvent.KEYCODE_CALL);
 
-        // Numpad 0-9, *, #
+        // 2. Full Numpad (Every button mapped individually)
         map(R.id.btn1, "1", 49, KeyEvent.KEYCODE_1);
         map(R.id.btn2, "2", 50, KeyEvent.KEYCODE_2);
         map(R.id.btn3, "3", 51, KeyEvent.KEYCODE_3);
@@ -78,14 +74,15 @@ public class MainActivity extends Activity {
 
     private void map(int id, String name, int js, int android) {
         View v = findViewById(id);
-        if (v == null) return;
-        v.setOnClickListener(view -> {
-            log("Key: " + name);
-            String script = "window.dispatchEvent(new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true}));";
-            webView.evaluateJavascript(script, null);
-            webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, android));
-            webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, android));
-        });
+        if (v != null) {
+            v.setOnClickListener(view -> {
+                log("Pressed: " + name);
+                String script = "window.dispatchEvent(new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true}));";
+                webView.evaluateJavascript(script, null);
+                webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, android));
+                webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, android));
+            });
+        }
     }
 
     private void log(String m) {
@@ -103,6 +100,7 @@ public class MainActivity extends Activity {
                 is.close();
                 String base64 = Base64.getEncoder().encodeToString(b);
                 webView.loadUrl("data:text/html;base64," + base64);
+                defaultText.setVisibility(View.GONE);
             } catch (Exception e) { log("Upload Error"); }
         }
     }
