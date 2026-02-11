@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.*;
 import android.view.KeyEvent;
+import android.view.View;
 import android.widget.*;
 import java.io.*;
 import java.util.Base64;
@@ -28,10 +29,12 @@ public class MainActivity extends Activity {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        s.setAllowFileAccess(true);
+        
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                defaultText.setVisibility(android.view.View.GONE);
+                defaultText.setVisibility(View.GONE);
                 log("Loaded: " + url);
             }
         });
@@ -57,11 +60,11 @@ public class MainActivity extends Activity {
         map(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
         map(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
         
-        // Red Button & Call Button Mapping
+        // Red Button (End) mapped to Backspace
         map(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
         map(R.id.btnCall, "Call", 10, KeyEvent.KEYCODE_CALL);
         
-        // Full Numpad Functionality
+        // Full Numpad
         map(R.id.btn1, "1", 49, KeyEvent.KEYCODE_1);
         map(R.id.btn2, "2", 50, KeyEvent.KEYCODE_2);
         map(R.id.btn3, "3", 51, KeyEvent.KEYCODE_3);
@@ -81,9 +84,12 @@ public class MainActivity extends Activity {
         if (btn == null) return;
         btn.setOnClickListener(v -> {
             log("Key: " + name);
-            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {key:'" + name + "', keyCode:" + jsCode + "}));" +
-                        "window.dispatchEvent(new KeyboardEvent('keyup', {key:'" + name + "', keyCode:" + jsCode + "}));";
+            // Inject JavaScript Keyboard Events
+            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {key:'" + name + "', keyCode:" + jsCode + ", bubbles:true}));" +
+                        "window.dispatchEvent(new KeyboardEvent('keyup', {key:'" + name + "', keyCode:" + jsCode + ", bubbles:true}));";
             webView.evaluateJavascript(js, null);
+            
+            // Dispatch Native Android Key Events
             webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, androidCode));
             webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, androidCode));
         });
@@ -91,9 +97,11 @@ public class MainActivity extends Activity {
 
     private void log(String msg) {
         keyLogger.append("\n> " + msg);
-        // Scroll logger to bottom
-        final int scrollAmount = keyLogger.getLayout().getLineTop(keyLogger.getLineCount()) - keyLogger.getHeight();
-        if (scrollAmount > 0) keyLogger.scrollTo(0, scrollAmount);
+        // Basic scroll logic for logger
+        keyLogger.post(() -> {
+            final int scrollAmount = keyLogger.getLayout().getLineTop(keyLogger.getLineCount()) - keyLogger.getHeight();
+            if (scrollAmount > 0) keyLogger.scrollTo(0, scrollAmount);
+        });
     }
 
     @Override
@@ -109,6 +117,15 @@ public class MainActivity extends Activity {
                 webView.loadUrl("data:text/html;base64," + encoded);
                 is.close();
             } catch (Exception e) { log("Upload Failed"); }
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack();
+        } else {
+            super.onBackPressed();
         }
     }
 }
