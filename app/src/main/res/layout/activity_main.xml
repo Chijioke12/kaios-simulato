@@ -15,11 +15,11 @@
 
         <!-- TOP BAR -->
         <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">
-            <TextView android:id="@+id/appTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="KAIOS SIM" android:textColor="#FFF" android:textStyle="bold" />
-            <Switch android:id="@+id/themeSwitch" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_alignParentRight="true" android:text="LIGHT" android:textColor="#FFF" />
+            <TextView android:id="@+id/appTitle" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="KAIOS ULTIMATE SIM" android:textColor="#FFF" android:textStyle="bold" />
+            <Switch android:id="@+id/themeSwitch" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_alignParentRight="true" android:text="LIGHT MODE" android:textColor="#FFF" />
         </RelativeLayout>
 
-        <!-- PHONE BODY RESTORED -->
+        <!-- CHASSIS -->
         <LinearLayout
             android:id="@+id/phoneChassis"
             android:layout_width="260dp"
@@ -27,12 +27,13 @@
             android:background="#1e293b"
             android:orientation="vertical"
             android:padding="12dp"
-            android:layout_marginTop="10dp"
-            android:elevation="10dp">
+            android:layout_marginTop="5dp"
+            android:elevation="8dp">
 
-            <FrameLayout android:layout_width="240dp" android:layout_height="300dp" android:background="#000">
+            <!-- 240x320 SCREEN -->
+            <FrameLayout android:layout_width="240dp" android:layout_height="320dp" android:background="#000">
                 <WebView android:id="@+id/webView" android:layout_width="match_parent" android:layout_height="match_parent" />
-                <TextView android:id="@+id/defaultText" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="KAIOS READY" android:textColor="#444" />
+                <TextView android:id="@+id/defaultText" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="SYSTEM READY" android:textColor="#334155" />
             </FrameLayout>
 
             <!-- SOFT KEYS -->
@@ -43,52 +44,56 @@
             </LinearLayout>
 
             <!-- D-PAD -->
-            <RelativeLayout android:layout_width="130dp" android:layout_height="130dp" android:layout_gravity="center">
-                <Button android:id="@+id/btnUp" android:layout_width="50dp" android:layout_height="40dp" android:layout_centerHorizontal="true" android:text="UP" android:textColor="#FFF" android:backgroundTint="#334155" />
-                <Button android:id="@+id/btnLeft" android:layout_width="45dp" android:layout_height="50dp" android:layout_centerVertical="true" android:text="L" android:textColor="#FFF" android:backgroundTint="#334155" />
-                <Button android:id="@+id/btnOk" android:layout_width="55dp" android:layout_height="55dp" android:layout_centerInParent="true" android:text="OK" android:textColor="#FFF" android:backgroundTint="#16a34a" />
-                <Button android:id="@+id/btnRight" android:layout_width="45dp" android:layout_height="50dp" android:layout_alignParentRight="true" android:layout_centerVertical="true" android:text="R" android:textColor="#FFF" android:backgroundTint="#334155" />
-                <Button android:id="@+id/btnDown" android:layout_width="50dp" android:layout_height="40dp" android:layout_centerHorizontal="true" android:layout_alignParentBottom="true" android:text="DWN" android:textColor="#FFF" android:backgroundTint="#334155" />
+            <RelativeLayout android:layout_width="120dp" android:layout_height="120dp" android:layout_gravity="center">
+                <Button android:id="@+id/btnUp" android:layout_width="45dp" android:layout_height="35dp" android:layout_centerHorizontal="true" android:text="UP" android:textColor="#FFF" android:backgroundTint="#334155" />
+                <Button android:id="@+id/btnLeft" android:layout_width="35dp" android:layout_height="45dp" android:layout_centerVertical="true" android:text="L" android:textColor="#FFF" android:backgroundTint="#334155" />
+                <Button android:id="@+id/btnOk" android:layout_width="50dp" android:layout_height="50dp" android:layout_centerInParent="true" android:text="OK" android:textColor="#FFF" android:backgroundTint="#16a34a" />
+                <Button android:id="@+id/btnRight" android:layout_width="35dp" android:layout_height="45dp" android:layout_alignParentRight="true" android:layout_centerVertical="true" android:text="R" android:textColor="#FFF" android:backgroundTint="#334155" />
+                <Button android:id="@+id/btnDown" android:layout_width="45dp" android:layout_height="35dp" android:layout_centerHorizontal="true" android:layout_alignParentBottom="true" android:text="DWN" android:textColor="#FFF" android:backgroundTint="#334155" />
             </RelativeLayout>
 
-            <!-- CALL / BACK -->
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp">
-                <Button android:id="@+id/btnCall" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:text="CALL" android:textColor="#FFF" android:backgroundTint="#15803d" />
+            <!-- CALL / CLR -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp">
+                <Button android:id="@+id/btnCall" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="CALL" android:textColor="#FFF" android:backgroundTint="#15803d" />
                 <View android:layout_width="10dp" android:layout_height="1dp" />
-                <Button android:id="@+id/btnEnd" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:text="CLR" android:textColor="#FFF" android:backgroundTint="#b91c1c" />
+                <Button android:id="@+id/btnEnd" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="CLR" android:textColor="#FFF" android:backgroundTint="#b91c1c" />
             </LinearLayout>
 
-            <!-- FULL NUMPAD RESTORED -->
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="5dp">
-                <Button android:id="@+id/btn1" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="1" android:textColor="#FFF" android:backgroundTint="#1e293b" />
-                <Button android:id="@+id/btn2" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="2" android:textColor="#FFF" android:backgroundTint="#1e293b" />
-                <Button android:id="@+id/btn3" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="3" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+            <!-- NUMPAD -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="2dp">
+                <Button android:id="@+id/btn1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="1" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn2" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="2" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn3" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="3" android:textColor="#FFF" android:backgroundTint="#1e293b" />
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                <Button android:id="@+id/btn4" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="4" android:textColor="#FFF" android:backgroundTint="#1e293b" />
-                <Button android:id="@+id/btn5" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="5" android:textColor="#FFF" android:backgroundTint="#1e293b" />
-                <Button android:id="@+id/btn6" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="6" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn4" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="4" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn5" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="5" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn6" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="6" android:textColor="#FFF" android:backgroundTint="#1e293b" />
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                <Button android:id="@+id/btn7" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="7" android:textColor="#FFF" android:backgroundTint="#1e293b" />
-                <Button android:id="@+id/btn8" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="8" android:textColor="#FFF" android:backgroundTint="#1e293b" />
-                <Button android:id="@+id/btn9" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="9" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn7" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="7" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn8" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="8" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn9" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="9" android:textColor="#FFF" android:backgroundTint="#1e293b" />
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                <Button android:id="@+id/btnStar" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="*" android:textColor="#FFF" android:backgroundTint="#1e293b" />
-                <Button android:id="@+id/btn0" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="0" android:textColor="#FFF" android:backgroundTint="#1e293b" />
-                <Button android:id="@+id/btnHash" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:text="#" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btnStar" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="*" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btn0" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="0" android:textColor="#FFF" android:backgroundTint="#1e293b" />
+                <Button android:id="@+id/btnHash" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="#" android:textColor="#FFF" android:backgroundTint="#1e293b" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- TOOLBAR -->
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="15dp">
+        <!-- EXTERNAL TOOLS -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="10dp">
             <Button android:id="@+id/btnUpload" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="UPLOAD HTML FILE" android:backgroundTint="#2563eb" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp">
                 <EditText android:id="@+id/urlInput" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="localhost:8080" android:textColor="#FFF" android:background="#1e293b" android:padding="12dp" />
                 <Button android:id="@+id/btnLoad" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="GO" android:backgroundTint="#16a34a" />
             </LinearLayout>
-            <Button android:id="@+id/btnSaveIcon" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="CAPTURE SCREENSHOT" android:backgroundTint="#db2777" android:layout_marginTop="5dp" />
+            <Button android:id="@+id/btnScreenshot" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="SCREENSHOT TO GALLERY" android:backgroundTint="#db2777" android:layout_marginTop="5dp" />
+            
+            <ScrollView android:id="@+id/logScroll" android:layout_width="match_parent" android:layout_height="80dp" android:background="#000" android:layout_marginTop="5dp">
+                <TextView android:id="@+id/keyLogger" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#22c55e" android:padding="8dp" android:fontFamily="monospace" android:text="> Logger Active" />
+            </ScrollView>
         </LinearLayout>
     </LinearLayout>
 </ScrollView>
