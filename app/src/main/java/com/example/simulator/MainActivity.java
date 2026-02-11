@@ -1,16 +1,19 @@
 package com.example.simulator;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
+import android.webkit.*;
 import android.view.KeyEvent;
-import android.widget.Button;
-import android.widget.EditText;
+import android.widget.*;
+import java.io.*;
+import java.util.Base64;
 
 public class MainActivity extends Activity {
     private WebView webView;
+    private TextView keyLogger, defaultText;
+    private static final int FILE_PICKER_CODE = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -18,72 +21,91 @@ public class MainActivity extends Activity {
         setContentView(R.layout.activity_main);
 
         webView = findViewById(R.id.webView);
+        keyLogger = findViewById(R.id.keyLogger);
+        defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
-        Button btnLoad = findViewById(R.id.btnLoad);
 
-        // Standard WebView Settings for Simulators
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
+        // WEBVIEW CONFIG
+        webView.setBackgroundColor(0xFF000000); // Start Dark
+        WebSettings s = webView.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                defaultText.setVisibility(android.view.View.GONE);
+                log("Page Loaded: " + url);
+            }
+        });
 
-        webView.setWebViewClient(new WebViewClient());
-
-        btnLoad.setOnClickListener(v -> {
+        // LOAD URL
+        findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString();
             if(!url.startsWith("http")) url = "http://" + url;
             webView.loadUrl(url);
         });
 
-        // --- KEY MAPPINGS ---
-        
-        // Softkeys (KaiOS SoftLeft/Right are usually mapped to F1/F2 or SoftLeft/Right in specialized browsers)
-        findViewById(R.id.btnSoftLeft).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_SOFT_LEFT));
-        findViewById(R.id.btnSoftRight).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_SOFT_RIGHT));
+        // UPLOAD HTML FILE
+        findViewById(R.id.btnUpload).setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("text/html");
+            startActivityForResult(intent, FILE_PICKER_CODE);
+        });
 
-        // D-Pad
-        findViewById(R.id.btnUp).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_DPAD_UP));
-        findViewById(R.id.btnDown).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_DPAD_DOWN));
-        findViewById(R.id.btnLeft).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_DPAD_LEFT));
-        findViewById(R.id.btnRight).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_DPAD_RIGHT));
-        findViewById(R.id.btnOk).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_ENTER));
-
-        // Numpad
-        findViewById(R.id.btn1).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_1));
-        findViewById(R.id.btn2).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_2));
-        findViewById(R.id.btn3).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_3));
-        findViewById(R.id.btn4).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_4));
-        findViewById(R.id.btn5).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_5));
-        findViewById(R.id.btn6).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_6));
-        findViewById(R.id.btn7).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_7));
-        findViewById(R.id.btn8).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_8));
-        findViewById(R.id.btn9).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_9));
-        findViewById(R.id.btn0).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_0));
-        findViewById(R.id.btnStar).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_STAR));
-        findViewById(R.id.btnHash).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_POUND));
-
-        // Call & End & Back
-        findViewById(R.id.btnCall).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_CALL));
-        findViewById(R.id.btnEnd).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_ENDCALL));
-        findViewById(R.id.btnBack).setOnClickListener(v -> sendKey(KeyEvent.KEYCODE_DEL));
+        // --- KEY INJECTION ---
+        // Mapping KaiOS Software keys (usually F1/F2 or custom events)
+        map(R.id.btnSoftLeft, "SoftLeft", 112);  // F1
+        map(R.id.btnSoftRight, "SoftRight", 113); // F2
+        map(R.id.btnOk, "Enter", 13);
+        map(R.id.btnUp, "ArrowUp", 38);
+        map(R.id.btnDown, "ArrowDown", 40);
+        map(R.id.btnLeft, "ArrowLeft", 37);
+        map(R.id.btnRight, "ArrowRight", 39);
+        // ... map numbers similarly
     }
 
-    private void sendKey(int keyCode) {
-        // We dispatch both Down and Up to simulate a full click
-        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keyCode));
-        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, keyCode));
+    private void map(int resId, String name, int jsCode) {
+        findViewById(resId).setOnClickListener(v -> {
+            log("Key: " + name);
+            // We inject a REAL JavaScript keyboard event so KaiOS apps respond
+            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {key:'" + name + "', keyCode:" + jsCode + "}));";
+            webView.evaluateJavascript(js, null);
+            
+            // Also send native Android key for standard WebViews
+            int androidCode = translateToAndroid(jsCode);
+            webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, androidCode));
+            webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, androidCode));
+        });
     }
 
-    // Prevents the app from closing when "Back" is pressed, navigates WebView instead
+    private void log(String msg) {
+        keyLogger.append("\n> " + msg);
+        // Auto-scroll logic
+        final int scrollAmount = keyLogger.getLayout().getLineTop(keyLogger.getLineCount()) - keyLogger.getHeight();
+        if (scrollAmount > 0) keyLogger.scrollTo(0, scrollAmount);
+    }
+
     @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_PICKER_CODE && resultCode == RESULT_OK) {
+            Uri uri = data.getData();
+            try {
+                InputStream is = getContentResolver().openInputStream(uri);
+                byte[] buffer = new byte[is.available()];
+                is.read(buffer);
+                is.close();
+                String content = new String(buffer);
+                // Load as data URL to avoid permission issues
+                String encoded = Base64.getEncoder().encodeToString(content.getBytes());
+                webView.loadUrl("data:text/html;base64," + encoded);
+            } catch (Exception e) { log("Error loading file"); }
         }
+    }
+
+    private int translateToAndroid(int js) {
+        if(js == 38) return KeyEvent.KEYCODE_DPAD_UP;
+        if(js == 40) return KeyEvent.KEYCODE_DPAD_DOWN;
+        if(js == 13) return KeyEvent.KEYCODE_ENTER;
+        return KeyEvent.KEYCODE_UNKNOWN;
     }
 }
