@@ -2,11 +2,12 @@ package com.example.simulator;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Bundle;
-import android.webkit.*;
+import android.os.Handler;
+import android.view.MotionEvent;
 import android.view.KeyEvent;
 import android.view.View;
+import android.webkit.*;
 import android.widget.*;
 import java.io.*;
 import java.util.Base64;
@@ -15,6 +16,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private TextView keyLogger, defaultText;
     private ScrollView logScroll;
+    private Handler repeatHandler = new Handler();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,11 +27,19 @@ public class MainActivity extends Activity {
         keyLogger = findViewById(R.id.keyLogger);
         logScroll = findViewById(R.id.logScroll);
         defaultText = findViewById(R.id.defaultText);
+        EditText urlInput = findViewById(R.id.urlInput);
 
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         webView.setWebViewClient(new WebViewClient());
+
+        findViewById(R.id.btnLoad).setOnClickListener(v -> {
+            String url = urlInput.getText().toString();
+            if(!url.startsWith("http")) url = "http://" + url;
+            webView.loadUrl(url);
+            defaultText.setVisibility(View.GONE);
+        });
 
         findViewById(R.id.btnUpload).setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_GET_CONTENT);
@@ -37,38 +47,63 @@ public class MainActivity extends Activity {
             startActivityForResult(i, 101);
         });
 
-        // Map every button individually to ensure IDs are correct
-        map(R.id.btn1, "1", 49, KeyEvent.KEYCODE_1);
-        map(R.id.btn2, "2", 50, KeyEvent.KEYCODE_2);
-        map(R.id.btn3, "3", 51, KeyEvent.KEYCODE_3);
-        map(R.id.btn4, "4", 52, KeyEvent.KEYCODE_4);
-        map(R.id.btn5, "5", 53, KeyEvent.KEYCODE_5);
-        map(R.id.btn6, "6", 54, KeyEvent.KEYCODE_6);
-        map(R.id.btn7, "7", 55, KeyEvent.KEYCODE_7);
-        map(R.id.btn8, "8", 56, KeyEvent.KEYCODE_8);
-        map(R.id.btn9, "9", 57, KeyEvent.KEYCODE_9);
-        map(R.id.btn0, "0", 48, KeyEvent.KEYCODE_0);
-        map(R.id.btnStar, "*", 42, KeyEvent.KEYCODE_STAR);
-        map(R.id.btnHash, "#", 35, KeyEvent.KEYCODE_POUND);
+        // --- MAP KEYS WITH AUTO-REPEAT ---
+        setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
+        setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
+        setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
+        setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
+        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
+        setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
+        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL); // Call is F3 in many JS emus
         
-        map(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
-        map(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
-        map(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
-        map(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
-        map(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
-        map(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
+        setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
+        setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
+
+        // Numpad (Repeat usually not needed for numbers but added for consistency)
+        int[] numIds = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
+        String[] numNames = {"0","1","2","3","4","5","6","7","8","9","*","#"};
+        int[] jsCodes = {48,49,50,51,52,53,54,55,56,57,42,35};
+        int[] androidCodes = {7,8,9,10,11,12,13,14,15,16,17,18};
+
+        for(int i=0; i<numIds.length; i++) {
+            setupKey(numIds[i], numNames[i], jsCodes[i], androidCodes[i]);
+        }
     }
 
-    private void map(int id, String name, int js, int android) {
-        Button b = findViewById(id);
-        if (b != null) {
-            b.setOnClickListener(v -> {
-                log("Key: " + name);
-                webView.evaluateJavascript("window.dispatchEvent(new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true}));", null);
-                webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, android));
-                webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, android));
-            });
-        }
+    private void setupKey(int id, String name, int js, int android) {
+        View v = findViewById(id);
+        if (v == null) return;
+
+        v.setOnTouchListener(new View.OnTouchListener() {
+            private Runnable action = new Runnable() {
+                @Override public void run() {
+                    trigger(name, js, android);
+                    repeatHandler.postDelayed(this, 120); // Repeat every 120ms
+                }
+            };
+
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                switch(event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        repeatHandler.post(action);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        repeatHandler.removeCallbacks(action);
+                        return true;
+                }
+                return false;
+            }
+        });
+    }
+
+    private void trigger(String name, int js, int android) {
+        log("Key: " + name);
+        String script = "window.dispatchEvent(new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true}));";
+        webView.evaluateJavascript(script, null);
+        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, android));
+        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, android));
     }
 
     private void log(String m) {
