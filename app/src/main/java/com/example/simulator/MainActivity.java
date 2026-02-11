@@ -44,6 +44,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         
+        // Ensure WebView is ready for native hardware input
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
         webView.setWebViewClient(new WebViewClient());
@@ -70,31 +71,31 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- MAP KEYS ---
-        setupKey(R.id.btnUp, "ArrowUp", 38);
-        setupKey(R.id.btnDown, "ArrowDown", 40);
-        setupKey(R.id.btnLeft, "ArrowLeft", 37);
-        setupKey(R.id.btnRight, "ArrowRight", 39);
-        setupKey(R.id.btnOk, "Enter", 13);
-        setupKey(R.id.btnEnd, "Backspace", 8);
-        setupKey(R.id.btnCall, "Call", 114);
-        setupKey(R.id.btnSoftLeft, "SoftLeft", 112);
-        setupKey(R.id.btnSoftRight, "SoftRight", 113);
+        // --- MAP NATIVE ANDROID CODES ---
+        setupKey(R.id.btnUp, "Up", KeyEvent.KEYCODE_DPAD_UP);
+        setupKey(R.id.btnDown, "Down", KeyEvent.KEYCODE_DPAD_DOWN);
+        setupKey(R.id.btnLeft, "Left", KeyEvent.KEYCODE_DPAD_LEFT);
+        setupKey(R.id.btnRight, "Right", KeyEvent.KEYCODE_DPAD_RIGHT);
+        setupKey(R.id.btnOk, "OK", KeyEvent.KEYCODE_ENTER);
+        setupKey(R.id.btnEnd, "Clear", KeyEvent.KEYCODE_DEL);
+        setupKey(R.id.btnCall, "Call", KeyEvent.KEYCODE_CALL);
+        setupKey(R.id.btnSoftLeft, "SoftL", KeyEvent.KEYCODE_F1);
+        setupKey(R.id.btnSoftRight, "SoftR", KeyEvent.KEYCODE_F2);
 
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         String[] names = {"0","1","2","3","4","5","6","7","8","9","*","#"};
-        int[] js = {48,49,50,51,52,53,54,55,56,57,42,35};
-        for(int i=0; i<ids.length; i++) setupKey(ids[i], names[i], js[i]);
+        int[] ak = {KeyEvent.KEYCODE_0, KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_3, KeyEvent.KEYCODE_4, KeyEvent.KEYCODE_5, KeyEvent.KEYCODE_6, KeyEvent.KEYCODE_7, KeyEvent.KEYCODE_8, KeyEvent.KEYCODE_9, KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_POUND};
+        for(int i=0; i<ids.length; i++) setupKey(ids[i], names[i], ak[i]);
     }
 
-    private void setupKey(int id, final String name, final int jsCode) {
+    private void setupKey(int id, final String name, final int androidCode) {
         final View v = findViewById(id);
         if (v == null) return;
         
         v.setOnTouchListener(new View.OnTouchListener() {
             private Runnable action = new Runnable() {
                 @Override public void run() {
-                    trigger(name, jsCode);
+                    trigger(name, androidCode);
                     repeatHandler.postDelayed(this, REPEAT_INTERVAL);
                 }
             };
@@ -105,7 +106,7 @@ public class MainActivity extends Activity {
                     case MotionEvent.ACTION_DOWN:
                         v.setPressed(true);
                         v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                        trigger(name, jsCode); 
+                        trigger(name, androidCode); 
                         repeatHandler.postDelayed(action, INITIAL_DELAY);
                         return true;
                     case MotionEvent.ACTION_UP:
@@ -119,17 +120,12 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void trigger(String name, int js) {
+    private void trigger(String name, int code) {
         log("Key: " + name);
-        // We simulate BOTH keydown and keyup in one JS call to complete the action
-        // We REMOVED dispatchKeyEvent to stop the double-firing
-        String script = "(function(){" +
-            "var d=new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true});" +
-            "var u=new KeyboardEvent('keyup',{key:'"+name+"',keyCode:"+js+",bubbles:true});" +
-            "window.dispatchEvent(d);document.dispatchEvent(d);" +
-            "window.dispatchEvent(u);document.dispatchEvent(u);" +
-            "})();";
-        webView.evaluateJavascript(script, null);
+        // ONLY Native Dispatch - No JS Injection here to prevent double-firing
+        // The WebView internal engine will handle converting this to a JS event for the game
+        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, code));
+        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, code));
     }
 
     private void log(String m) {
