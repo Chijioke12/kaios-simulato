@@ -25,7 +25,6 @@ public class MainActivity extends Activity {
     private ScrollView logScroll;
     private Handler repeatHandler = new Handler();
     
-    // Faster timings for a "snappy" feel
     private static final int INITIAL_DELAY = 300; 
     private static final int REPEAT_INTERVAL = 100;
 
@@ -71,32 +70,31 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- MAP ALL KEYS UNIFORMLY ---
-        setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
-        setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
-        setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
-        setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
-        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
-        setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
-        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL);
-        setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
-        setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
+        // --- MAP KEYS ---
+        setupKey(R.id.btnUp, "ArrowUp", 38);
+        setupKey(R.id.btnDown, "ArrowDown", 40);
+        setupKey(R.id.btnLeft, "ArrowLeft", 37);
+        setupKey(R.id.btnRight, "ArrowRight", 39);
+        setupKey(R.id.btnOk, "Enter", 13);
+        setupKey(R.id.btnEnd, "Backspace", 8);
+        setupKey(R.id.btnCall, "Call", 114);
+        setupKey(R.id.btnSoftLeft, "SoftLeft", 112);
+        setupKey(R.id.btnSoftRight, "SoftRight", 113);
 
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         String[] names = {"0","1","2","3","4","5","6","7","8","9","*","#"};
         int[] js = {48,49,50,51,52,53,54,55,56,57,42,35};
-        int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
-        for(int i=0; i<ids.length; i++) setupKey(ids[i], names[i], js[i], ak[i]);
+        for(int i=0; i<ids.length; i++) setupKey(ids[i], names[i], js[i]);
     }
 
-    private void setupKey(int id, final String name, final int jsCode, final int androidCode) {
+    private void setupKey(int id, final String name, final int jsCode) {
         final View v = findViewById(id);
         if (v == null) return;
         
         v.setOnTouchListener(new View.OnTouchListener() {
             private Runnable action = new Runnable() {
                 @Override public void run() {
-                    trigger(name, jsCode, androidCode);
+                    trigger(name, jsCode);
                     repeatHandler.postDelayed(this, REPEAT_INTERVAL);
                 }
             };
@@ -107,8 +105,8 @@ public class MainActivity extends Activity {
                     case MotionEvent.ACTION_DOWN:
                         v.setPressed(true);
                         v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                        trigger(name, jsCode, androidCode); // Instant first fire
-                        repeatHandler.postDelayed(action, INITIAL_DELAY); // Wait then repeat
+                        trigger(name, jsCode); 
+                        repeatHandler.postDelayed(action, INITIAL_DELAY);
                         return true;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
@@ -121,14 +119,17 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void trigger(String name, int js, int ak) {
+    private void trigger(String name, int js) {
         log("Key: " + name);
-        // Minimal JS string for maximum speed
-        String script = "var e=new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true});window.dispatchEvent(e);document.dispatchEvent(e);";
+        // We simulate BOTH keydown and keyup in one JS call to complete the action
+        // We REMOVED dispatchKeyEvent to stop the double-firing
+        String script = "(function(){" +
+            "var d=new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true});" +
+            "var u=new KeyboardEvent('keyup',{key:'"+name+"',keyCode:"+js+",bubbles:true});" +
+            "window.dispatchEvent(d);document.dispatchEvent(d);" +
+            "window.dispatchEvent(u);document.dispatchEvent(u);" +
+            "})();";
         webView.evaluateJavascript(script, null);
-        
-        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
-        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
     }
 
     private void log(String m) {
