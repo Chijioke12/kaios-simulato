@@ -17,7 +17,6 @@ public class MainActivity extends Activity {
     private WebView webView;
     private TextView keyLogger, appTitle, defaultText;
     private ScrollView logScroll, rootLayout;
-    private Handler repeatHandler = new Handler();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,7 +37,6 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         webView.setWebViewClient(new WebViewClient());
 
-        // Theme Toggle
         themeSwitch.setOnCheckedChangeListener((b, isChecked) -> {
             if (isChecked) {
                 rootLayout.setBackgroundColor(0xFFF1F5F9);
@@ -49,7 +47,6 @@ public class MainActivity extends Activity {
             }
         });
 
-        // URL Go
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString();
             if(!url.startsWith("http")) url = "http://" + url;
@@ -57,17 +54,15 @@ public class MainActivity extends Activity {
             defaultText.setVisibility(View.GONE);
         });
 
-        // HTML Upload
         findViewById(R.id.btnUpload).setOnClickListener(v -> {
             Intent i = new Intent(Intent.ACTION_GET_CONTENT);
             i.setType("text/html");
             startActivityForResult(i, 101);
         });
 
-        // Screenshot
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // Map Keys
+        // --- FIXED KEY MAPPINGS (4 ARGUMENTS EACH) ---
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
@@ -76,11 +71,17 @@ public class MainActivity extends Activity {
         setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
         setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
         setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
+        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL);
 
+        // Numpad Loop Fixed
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         String[] names = {"0","1","2","3","4","5","6","7","8","9","*","#"};
-        int[] codes = {7,8,9,10,11,12,13,14,15,16,17,18};
-        for(int i=0; i<ids.length; i++) setupKey(ids[i], names[i], codes[i]);
+        int[] jsCodes = {48,49,50,51,52,53,54,55,56,57,42,35};
+        int[] akCodes = {7,8,9,10,11,12,13,14,15,16,17,18};
+
+        for(int i=0; i<ids.length; i++) {
+            setupKey(ids[i], names[i], jsCodes[i], akCodes[i]);
+        }
     }
 
     private void setupKey(int id, String name, int js, int ak) {
@@ -90,6 +91,7 @@ public class MainActivity extends Activity {
             if(event.getAction() == MotionEvent.ACTION_DOWN) {
                 v.setPressed(true);
                 log("Key: " + name);
+                // We use only native events to prevent double-firing
                 webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
                 webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
             } else if(event.getAction() == MotionEvent.ACTION_UP) {
@@ -115,8 +117,9 @@ public class MainActivity extends Activity {
             OutputStream os = getContentResolver().openOutputStream(getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv));
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
-            log("Screenshot Saved!");
-        } catch (Exception e) { log("Capture Error"); }
+            log("Saved to Gallery!");
+            Toast.makeText(this, "Screenshot Saved!", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) { log("Error Saving"); }
     }
 
     @Override
