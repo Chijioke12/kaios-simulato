@@ -12,7 +12,6 @@
         android:gravity="center_horizontal"
         android:padding="15dp">
 
-        <!-- PHONE CHASSIS -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -21,26 +20,14 @@
             android:padding="12dp"
             android:elevation="8dp">
 
-            <!-- SCREEN: EXACT KAIOS RATIO 240x320 -->
             <FrameLayout
                 android:layout_width="240dp"
                 android:layout_height="320dp"
                 android:background="#000000">
-                <WebView
-                    android:id="@+id/webView"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent" />
-                <TextView
-                    android:id="@+id/defaultText"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:gravity="center"
-                    android:text="KaiOS Simulator\n\nLoad HTML or URL"
-                    android:textColor="#4a5568"
-                    android:textSize="14sp" />
+                <WebView android:id="@+id/webView" android:layout_width="match_parent" android:layout_height="match_parent" />
+                <TextView android:id="@+id/defaultText" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:text="KaiOS Simulator\nLocked 240x320" android:textColor="#4a5568" />
             </FrameLayout>
 
-            <!-- SOFT KEYS -->
             <LinearLayout
                 android:layout_width="240dp"
                 android:layout_height="wrap_content"
@@ -51,7 +38,6 @@
                 <Button android:id="@+id/btnSoftRight" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:text="OPTIONS" android:backgroundTint="#4b5563" android:textSize="10sp" />
             </LinearLayout>
 
-            <!-- D-PAD -->
             <RelativeLayout
                 android:layout_width="120dp"
                 android:layout_height="120dp"
@@ -64,17 +50,16 @@
                 <Button android:id="@+id/btnDown" android:layout_width="45dp" android:layout_height="35dp" android:layout_centerHorizontal="true" android:layout_alignParentBottom="true" android:text="↓" android:backgroundTint="#4a5568" />
             </RelativeLayout>
 
-            <!-- CALL/END -->
             <LinearLayout
                 android:layout_width="240dp"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp">
                 <Button android:id="@+id/btnCall" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:text="📞" android:backgroundTint="#059669" />
                 <View android:layout_width="20dp" android:layout_height="1dp" />
-                <Button android:id="@+id/btnEnd" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:text="📵" android:backgroundTint="#dc2626" />
+                <!-- RED BUTTON IS NOW BACKSPACE -->
+                <Button android:id="@+id/btnEnd" android:layout_width="0dp" android:layout_height="45dp" android:layout_weight="1" android:text="⌫" android:backgroundTint="#dc2626" />
             </LinearLayout>
 
-            <!-- NUMPAD -->
             <GridLayout
                 android:layout_width="240dp"
                 android:layout_height="wrap_content"
@@ -93,24 +78,18 @@
                 <Button android:id="@+id/btn0" android:text="0" android:layout_columnWeight="1" android:backgroundTint="#374151" />
                 <Button android:id="@+id/btnHash" android:text="#" android:layout_columnWeight="1" android:backgroundTint="#374151" />
             </GridLayout>
-
-            <Button android:id="@+id/btnBack" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="BACKSPACE" android:backgroundTint="#4b5563" />
         </LinearLayout>
 
-        <!-- EXTERNAL CONTROLS -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_marginTop="20dp">
-            
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
                 <Button android:id="@+id/btnUpload" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="UPLOAD" android:backgroundTint="#2563eb" />
                 <Button android:id="@+id/btnLoad" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="LOAD" android:backgroundTint="#059669" />
             </LinearLayout>
-
             <EditText android:id="@+id/urlInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="localhost:8080" android:textColor="#FFF" android:background="#111827" android:padding="10dp" />
-
             <TextView android:id="@+id/keyLogger" android:layout_width="match_parent" android:layout_height="80dp" android:background="#000" android:textColor="#00FF00" android:fontFamily="monospace" android:padding="5dp" android:textSize="10sp" android:text="> Logger Ready..." />
         </LinearLayout>
     </LinearLayout>

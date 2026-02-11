@@ -48,7 +48,7 @@ public class MainActivity extends Activity {
             startActivityForResult(intent, FILE_PICKER_CODE);
         });
 
-        // Setup All Mappings
+        // --- KEY MAPPINGS ---
         map(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
         map(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
         map(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
@@ -56,19 +56,33 @@ public class MainActivity extends Activity {
         map(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
         map(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
         map(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
-        map(R.id.btnBack, "Backspace", 8, KeyEvent.KEYCODE_DEL);
         
-        // Numpad Mapping
+        // Red Button & Call Button Mapping
+        map(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
+        map(R.id.btnCall, "Call", 10, KeyEvent.KEYCODE_CALL);
+        
+        // Full Numpad Functionality
         map(R.id.btn1, "1", 49, KeyEvent.KEYCODE_1);
         map(R.id.btn2, "2", 50, KeyEvent.KEYCODE_2);
         map(R.id.btn3, "3", 51, KeyEvent.KEYCODE_3);
+        map(R.id.btn4, "4", 52, KeyEvent.KEYCODE_4);
+        map(R.id.btn5, "5", 53, KeyEvent.KEYCODE_5);
+        map(R.id.btn6, "6", 54, KeyEvent.KEYCODE_6);
+        map(R.id.btn7, "7", 55, KeyEvent.KEYCODE_7);
+        map(R.id.btn8, "8", 56, KeyEvent.KEYCODE_8);
+        map(R.id.btn9, "9", 57, KeyEvent.KEYCODE_9);
         map(R.id.btn0, "0", 48, KeyEvent.KEYCODE_0);
+        map(R.id.btnStar, "*", 42, KeyEvent.KEYCODE_STAR);
+        map(R.id.btnHash, "#", 35, KeyEvent.KEYCODE_POUND);
     }
 
     private void map(int resId, String name, int jsCode, int androidCode) {
-        findViewById(resId).setOnClickListener(v -> {
+        View btn = findViewById(resId);
+        if (btn == null) return;
+        btn.setOnClickListener(v -> {
             log("Key: " + name);
-            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {key:'" + name + "', keyCode:" + jsCode + "}));";
+            String js = "window.dispatchEvent(new KeyboardEvent('keydown', {key:'" + name + "', keyCode:" + jsCode + "}));" +
+                        "window.dispatchEvent(new KeyboardEvent('keyup', {key:'" + name + "', keyCode:" + jsCode + "}));";
             webView.evaluateJavascript(js, null);
             webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, androidCode));
             webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, androidCode));
@@ -77,18 +91,23 @@ public class MainActivity extends Activity {
 
     private void log(String msg) {
         keyLogger.append("\n> " + msg);
+        // Scroll logger to bottom
+        final int scrollAmount = keyLogger.getLayout().getLineTop(keyLogger.getLineCount()) - keyLogger.getHeight();
+        if (scrollAmount > 0) keyLogger.scrollTo(0, scrollAmount);
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == FILE_PICKER_CODE && resultCode == RESULT_OK) {
+        if (requestCode == FILE_PICKER_CODE && resultCode == RESULT_OK && data != null) {
             try {
                 InputStream is = getContentResolver().openInputStream(data.getData());
-                byte[] buffer = new byte[is.available()];
-                is.read(buffer);
-                is.close();
-                String encoded = Base64.getEncoder().encodeToString(buffer);
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                byte[] b = new byte[1024];
+                int len;
+                while ((len = is.read(b)) != -1) bos.write(b, 0, len);
+                String encoded = Base64.getEncoder().encodeToString(bos.toByteArray());
                 webView.loadUrl("data:text/html;base64," + encoded);
+                is.close();
             } catch (Exception e) { log("Upload Failed"); }
         }
     }
