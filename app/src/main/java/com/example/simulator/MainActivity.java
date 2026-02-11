@@ -24,8 +24,10 @@ public class MainActivity extends Activity {
     private TextView keyLogger, defaultText;
     private ScrollView logScroll;
     private Handler repeatHandler = new Handler();
-    private static final int INITIAL_DELAY = 500;
-    private static final int REPEAT_INTERVAL = 150;
+    
+    // Faster timings for a "snappy" feel
+    private static final int INITIAL_DELAY = 300; 
+    private static final int REPEAT_INTERVAL = 100;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,16 +40,13 @@ public class MainActivity extends Activity {
         defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
-        // WEBVIEW SETUP
         webView.setBackgroundColor(0xFF1E1E1E);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         
-        // FIX: Focusable methods belong to the View (webView), not WebSettings (s)
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
-        
         webView.setWebViewClient(new WebViewClient());
 
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
@@ -72,7 +71,7 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // MAP KEYS
+        // --- MAP ALL KEYS UNIFORMLY ---
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
@@ -90,27 +89,26 @@ public class MainActivity extends Activity {
         for(int i=0; i<ids.length; i++) setupKey(ids[i], names[i], js[i], ak[i]);
     }
 
-    private void setupKey(int id, String name, int jsCode, int androidCode) {
-        View v = findViewById(id);
+    private void setupKey(int id, final String name, final int jsCode, final int androidCode) {
+        final View v = findViewById(id);
         if (v == null) return;
+        
         v.setOnTouchListener(new View.OnTouchListener() {
-            private boolean isFirstPress = true;
             private Runnable action = new Runnable() {
                 @Override public void run() {
                     trigger(name, jsCode, androidCode);
-                    long delay = isFirstPress ? INITIAL_DELAY : REPEAT_INTERVAL;
-                    isFirstPress = false;
-                    repeatHandler.postDelayed(this, delay);
+                    repeatHandler.postDelayed(this, REPEAT_INTERVAL);
                 }
             };
+
             @Override
             public boolean onTouch(View view, MotionEvent event) {
                 switch(event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         v.setPressed(true);
                         v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                        isFirstPress = true;
-                        repeatHandler.post(action);
+                        trigger(name, jsCode, androidCode); // Instant first fire
+                        repeatHandler.postDelayed(action, INITIAL_DELAY); // Wait then repeat
                         return true;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
@@ -125,9 +123,10 @@ public class MainActivity extends Activity {
 
     private void trigger(String name, int js, int ak) {
         log("Key: " + name);
-        String script = "var e = new KeyboardEvent('keydown', {key:'"+name+"', keyCode:"+js+", bubbles:true});" +
-                        "window.dispatchEvent(e); document.dispatchEvent(e);";
+        // Minimal JS string for maximum speed
+        String script = "var e=new KeyboardEvent('keydown',{key:'"+name+"',keyCode:"+js+",bubbles:true});window.dispatchEvent(e);document.dispatchEvent(e);";
         webView.evaluateJavascript(script, null);
+        
         webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
         webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
     }
