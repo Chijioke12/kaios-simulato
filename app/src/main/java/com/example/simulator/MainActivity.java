@@ -3,11 +3,17 @@ package com.example.simulator;
 import android.app.Activity;
 import android.content.ContentValues;
 import android.content.Intent;
-import android.graphics.*;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.net.Uri;
-import android.os.*;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Environment;
 import android.provider.MediaStore;
-import android.view.*;
+import android.view.HapticFeedbackConstants;
+import android.view.MotionEvent;
+import android.view.KeyEvent;
+import android.view.View;
 import android.webkit.*;
 import android.widget.*;
 import java.io.*;
@@ -15,11 +21,11 @@ import java.util.Base64;
 
 public class MainActivity extends Activity {
     private WebView webView;
-    private TextView keyLogger, appTitle, defaultText;
-    private ScrollView logScroll, rootLayout;
+    private TextView keyLogger, defaultText;
+    private ScrollView logScroll;
     private Handler repeatHandler = new Handler();
-    private static final int INITIAL_DELAY = 500; // Delay before repeat starts
-    private static final int REPEAT_INTERVAL = 100; // Speed of fast navigation
+    private static final int INITIAL_DELAY = 500;
+    private static final int REPEAT_INTERVAL = 150;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,27 +34,15 @@ public class MainActivity extends Activity {
 
         webView = findViewById(R.id.webView);
         keyLogger = findViewById(R.id.keyLogger);
-        appTitle = findViewById(R.id.appTitle);
-        defaultText = findViewById(R.id.defaultText);
         logScroll = findViewById(R.id.logScroll);
-        rootLayout = findViewById(R.id.rootLayout);
-        Switch themeSwitch = findViewById(R.id.themeSwitch);
+        defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
+        webView.setBackgroundColor(0xFF1E1E1E);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         webView.setWebViewClient(new WebViewClient());
-
-        themeSwitch.setOnCheckedChangeListener((b, isChecked) -> {
-            if (isChecked) {
-                rootLayout.setBackgroundColor(0xFFF1F5F9);
-                appTitle.setTextColor(0xFF0F172A);
-            } else {
-                rootLayout.setBackgroundColor(0xFF0F172A);
-                appTitle.setTextColor(0xFFFFFFFF);
-            }
-        });
 
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString();
@@ -71,56 +65,51 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- FAST NAVIGATION KEYS (DPAD & BACKSPACE) ---
-        setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
-        setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
-        setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
-        setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
-        setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
+        // SYSTEM KEYS
+        setupKey(R.id.btnUp, "ArrowUp", KeyEvent.KEYCODE_DPAD_UP);
+        setupKey(R.id.btnDown, "ArrowDown", KeyEvent.KEYCODE_DPAD_DOWN);
+        setupKey(R.id.btnLeft, "ArrowLeft", KeyEvent.KEYCODE_DPAD_LEFT);
+        setupKey(R.id.btnRight, "ArrowRight", KeyEvent.KEYCODE_DPAD_RIGHT);
+        setupKey(R.id.btnOk, "Enter", KeyEvent.KEYCODE_ENTER);
+        setupKey(R.id.btnEnd, "Backspace", KeyEvent.KEYCODE_DEL);
+        setupKey(R.id.btnCall, "Call", KeyEvent.KEYCODE_CALL);
+        setupKey(R.id.btnSoftLeft, "SoftLeft", KeyEvent.KEYCODE_F1);
+        setupKey(R.id.btnSoftRight, "SoftRight", KeyEvent.KEYCODE_F2);
 
-        // --- STANDARD KEYS ---
-        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
-        setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
-        setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
-        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL);
-
-        // Numpad Loop
+        // NUMPAD
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         String[] names = {"0","1","2","3","4","5","6","7","8","9","*","#"};
-        int[] akCodes = {7,8,9,10,11,12,13,14,15,16,17,18};
-
-        for(int i=0; i<ids.length; i++) {
-            setupKey(ids[i], names[i], 0, akCodes[i]);
-        }
+        int[] codes = {KeyEvent.KEYCODE_0, KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_2, KeyEvent.KEYCODE_3, KeyEvent.KEYCODE_4, KeyEvent.KEYCODE_5, KeyEvent.KEYCODE_6, KeyEvent.KEYCODE_7, KeyEvent.KEYCODE_8, KeyEvent.KEYCODE_9, KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_POUND};
+        
+        for(int i=0; i<ids.length; i++) setupKey(ids[i], names[i], codes[i]);
     }
 
-    private void setupKey(int id, final String name, final int js, final int ak) {
-        final View v = findViewById(id);
+    private void setupKey(int id, String name, int androidCode) {
+        View v = findViewById(id);
         if (v == null) return;
-
         v.setOnTouchListener(new View.OnTouchListener() {
-            private boolean isFirstPress = true;
+            private boolean isRepeating = false;
             private Runnable action = new Runnable() {
                 @Override public void run() {
-                    trigger(name, ak);
-                    long delay = isFirstPress ? INITIAL_DELAY : REPEAT_INTERVAL;
-                    isFirstPress = false;
-                    repeatHandler.postDelayed(this, delay);
+                    trigger(name, androidCode);
+                    isRepeating = true;
+                    repeatHandler.postDelayed(this, REPEAT_INTERVAL);
                 }
             };
-
             @Override
             public boolean onTouch(View view, MotionEvent event) {
                 switch(event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         v.setPressed(true);
-                        isFirstPress = true;
-                        repeatHandler.post(action);
+                        v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                        trigger(name, androidCode);
+                        repeatHandler.postDelayed(action, INITIAL_DELAY);
                         return true;
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
                         v.setPressed(false);
                         repeatHandler.removeCallbacks(action);
+                        isRepeating = false;
                         return true;
                 }
                 return false;
@@ -128,10 +117,10 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void trigger(String name, int ak) {
+    private void trigger(String name, int code) {
         log("Key: " + name);
-        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
-        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
+        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, code));
+        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, code));
     }
 
     private void log(String m) {
@@ -147,11 +136,12 @@ public class MainActivity extends Activity {
             cv.put(MediaStore.Images.Media.DISPLAY_NAME, "kaios_sim_" + System.currentTimeMillis() + ".png");
             cv.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
             cv.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES);
-            OutputStream os = getContentResolver().openOutputStream(getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv));
+            Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv);
+            OutputStream os = getContentResolver().openOutputStream(uri);
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
-            log("Saved Screenshot!");
-        } catch (Exception e) {}
+            log("Screenshot Saved to Gallery!");
+        } catch (Exception e) { log("Error Saving Screenshot"); }
     }
 
     @Override
