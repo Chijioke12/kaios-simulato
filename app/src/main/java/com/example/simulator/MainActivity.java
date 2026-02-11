@@ -25,8 +25,6 @@ public class MainActivity extends Activity {
         defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
-        // WEBVIEW CONFIG
-        webView.setBackgroundColor(0xFF000000); // Start Dark
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -34,45 +32,44 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 defaultText.setVisibility(android.view.View.GONE);
-                log("Page Loaded: " + url);
+                log("Loaded: " + url);
             }
         });
 
-        // LOAD URL
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString();
             if(!url.startsWith("http")) url = "http://" + url;
             webView.loadUrl(url);
         });
 
-        // UPLOAD HTML FILE
         findViewById(R.id.btnUpload).setOnClickListener(v -> {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
             intent.setType("text/html");
             startActivityForResult(intent, FILE_PICKER_CODE);
         });
 
-        // --- KEY INJECTION ---
-        // Mapping KaiOS Software keys (usually F1/F2 or custom events)
-        map(R.id.btnSoftLeft, "SoftLeft", 112);  // F1
-        map(R.id.btnSoftRight, "SoftRight", 113); // F2
-        map(R.id.btnOk, "Enter", 13);
-        map(R.id.btnUp, "ArrowUp", 38);
-        map(R.id.btnDown, "ArrowDown", 40);
-        map(R.id.btnLeft, "ArrowLeft", 37);
-        map(R.id.btnRight, "ArrowRight", 39);
-        // ... map numbers similarly
+        // Setup All Mappings
+        map(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
+        map(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
+        map(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
+        map(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
+        map(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
+        map(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
+        map(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
+        map(R.id.btnBack, "Backspace", 8, KeyEvent.KEYCODE_DEL);
+        
+        // Numpad Mapping
+        map(R.id.btn1, "1", 49, KeyEvent.KEYCODE_1);
+        map(R.id.btn2, "2", 50, KeyEvent.KEYCODE_2);
+        map(R.id.btn3, "3", 51, KeyEvent.KEYCODE_3);
+        map(R.id.btn0, "0", 48, KeyEvent.KEYCODE_0);
     }
 
-    private void map(int resId, String name, int jsCode) {
+    private void map(int resId, String name, int jsCode, int androidCode) {
         findViewById(resId).setOnClickListener(v -> {
             log("Key: " + name);
-            // We inject a REAL JavaScript keyboard event so KaiOS apps respond
             String js = "window.dispatchEvent(new KeyboardEvent('keydown', {key:'" + name + "', keyCode:" + jsCode + "}));";
             webView.evaluateJavascript(js, null);
-            
-            // Also send native Android key for standard WebViews
-            int androidCode = translateToAndroid(jsCode);
             webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, androidCode));
             webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, androidCode));
         });
@@ -80,32 +77,19 @@ public class MainActivity extends Activity {
 
     private void log(String msg) {
         keyLogger.append("\n> " + msg);
-        // Auto-scroll logic
-        final int scrollAmount = keyLogger.getLayout().getLineTop(keyLogger.getLineCount()) - keyLogger.getHeight();
-        if (scrollAmount > 0) keyLogger.scrollTo(0, scrollAmount);
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FILE_PICKER_CODE && resultCode == RESULT_OK) {
-            Uri uri = data.getData();
             try {
-                InputStream is = getContentResolver().openInputStream(uri);
+                InputStream is = getContentResolver().openInputStream(data.getData());
                 byte[] buffer = new byte[is.available()];
                 is.read(buffer);
                 is.close();
-                String content = new String(buffer);
-                // Load as data URL to avoid permission issues
-                String encoded = Base64.getEncoder().encodeToString(content.getBytes());
+                String encoded = Base64.getEncoder().encodeToString(buffer);
                 webView.loadUrl("data:text/html;base64," + encoded);
-            } catch (Exception e) { log("Error loading file"); }
+            } catch (Exception e) { log("Upload Failed"); }
         }
-    }
-
-    private int translateToAndroid(int js) {
-        if(js == 38) return KeyEvent.KEYCODE_DPAD_UP;
-        if(js == 40) return KeyEvent.KEYCODE_DPAD_DOWN;
-        if(js == 13) return KeyEvent.KEYCODE_ENTER;
-        return KeyEvent.KEYCODE_UNKNOWN;
     }
 }
