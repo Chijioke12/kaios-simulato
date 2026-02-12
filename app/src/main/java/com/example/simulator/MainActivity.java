@@ -65,72 +65,54 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- NAVIGATION & SOFTKEYS (Dual-Signal: JS + Native) ---
-        // Games need JS, Svelte accepts Native for these
+        // --- SMART NAVIGATION (Hybrid with Focus Check) ---
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP, true);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN, true);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT, true);
         setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT, true);
         setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER, true);
         setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL, true);
+        
+        // Softkeys (Always Hybrid because they don't have a default "Action" in Svelte)
         setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1, true);
         setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2, true);
-        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL, true);
 
-        // --- CHARACTERS (Pure Native: No JS Injection) ---
-        // This keeps Svelte from double-firing
+        // --- CHARACTERS (Native Only - Prevents Svelte double-fire) ---
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
-        int[] akCodes = {7,8,9,10,11,12,13,14,15,16,17,18};
-        String[] labels = {"0","1","2","3","4","5","6","7","8","9","*","#"};
-
-        for(int i=0; i<ids.length; i++) {
-            setupKey(ids[i], labels[i], 0, akCodes[i], false);
-        }
+        int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
+        for(int i=0; i<ids.length; i++) setupKey(ids[i], String.valueOf(i), 0, ak[i], false);
     }
 
-    private void setupKey(int id, final String name, final int js, final int ak, final boolean useJS) {
+    private void setupKey(int id, final String name, final int js, final int ak, final boolean useBridge) {
         View v = findViewById(id);
         if (v == null) return;
-
-        v.setOnTouchListener(new View.OnTouchListener() {
-            private boolean isFirst = true;
-            private Runnable repeatRunnable = new Runnable() {
-                @Override public void run() {
-                    dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useJS);
-                    long delay = isFirst ? INITIAL_DELAY : REPEAT_INTERVAL;
-                    isFirst = false;
-                    repeatHandler.postDelayed(this, delay);
-                }
-            };
-            @Override
-            public boolean onTouch(View view, MotionEvent event) {
-                if(event.getAction() == MotionEvent.ACTION_DOWN) {
-                    v.setPressed(true);
-                    v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                    isFirst = true;
-                    repeatHandler.post(repeatRunnable);
-                } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                    v.setPressed(false);
-                    repeatHandler.removeCallbacks(repeatRunnable);
-                    dispatch(name, js, ak, KeyEvent.ACTION_UP, useJS);
-                }
-                return true;
+        v.setOnTouchListener((view, event) -> {
+            if(event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.setPressed(true);
+                v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useBridge);
+            } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                v.setPressed(false);
+                dispatch(name, js, ak, KeyEvent.ACTION_UP, useBridge);
             }
+            return true;
         });
     }
 
-    private void dispatch(String name, int js, int ak, int action, boolean useJS) {
-        if (useJS) {
+    private void dispatch(String name, int js, int ak, int action, boolean useBridge) {
+        if (useBridge) {
             String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
-            // UNIVERSAL JS DISPATCH: window + document + property define
-            String script = "var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
-                            "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}}); " +
-                            "Object.defineProperty(e, 'which', {get:function(){return "+js+";}}); " +
-                            "window.dispatchEvent(e); document.dispatchEvent(e);";
+            // SMART BRIDGE: Only fire JS if the focus is on the BODY (Game mode)
+            // If focus is on a Svelte component (Button/Link), skip JS to prevent double-jump
+            String script = "if(document.activeElement === document.body || document.activeElement.tagName === 'CANVAS') {" +
+                            "  var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
+                            "  Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}});" +
+                            "  window.dispatchEvent(e); document.dispatchEvent(e);" +
+                            "}";
             webView.evaluateJavascript(script, null);
         }
 
-        // Always Native (Handles Svelte/System/Browsing)
+        // Always send Native (This moves focus in Svelte and types text)
         webView.dispatchKeyEvent(new KeyEvent(action, ak));
         if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
@@ -151,7 +133,7 @@ public class MainActivity extends Activity {
             OutputStream os = getContentResolver().openOutputStream(getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv));
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
-            log("Saved to Gallery!");
+            log("Saved Screenshot!");
         } catch (Exception e) {}
     }
 
