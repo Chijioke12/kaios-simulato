@@ -19,8 +19,10 @@ public class MainActivity extends Activity {
     private TextView keyLogger, defaultText;
     private ScrollView logScroll;
     private Handler repeatHandler = new Handler();
+    
+    // Smooth repeat timings
     private static final int INITIAL_DELAY = 400; 
-    private static final int REPEAT_INTERVAL = 100;
+    private static final int REPEAT_INTERVAL = 120;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,7 +67,7 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- SMART NAVIGATION (Hybrid with Focus Check) ---
+        // --- NAVIGATION & SYSTEM (Hybrid with Repeat) ---
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP, true);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN, true);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT, true);
@@ -73,11 +75,12 @@ public class MainActivity extends Activity {
         setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER, true);
         setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL, true);
         
-        // Softkeys (Always Hybrid because they don't have a default "Action" in Svelte)
+        // Softkeys (Always Hybrid)
         setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1, true);
         setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2, true);
+        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL, true);
 
-        // --- CHARACTERS (Native Only - Prevents Svelte double-fire) ---
+        // --- CHARACTERS (Native Only + Repeat) ---
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
         for(int i=0; i<ids.length; i++) setupKey(ids[i], String.valueOf(i), 0, ak[i], false);
@@ -86,34 +89,57 @@ public class MainActivity extends Activity {
     private void setupKey(int id, final String name, final int js, final int ak, final boolean useBridge) {
         View v = findViewById(id);
         if (v == null) return;
-        v.setOnTouchListener((view, event) -> {
-            if(event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.setPressed(true);
-                v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useBridge);
-            } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                v.setPressed(false);
-                dispatch(name, js, ak, KeyEvent.ACTION_UP, useBridge);
+
+        v.setOnTouchListener(new View.OnTouchListener() {
+            private boolean isFirst = true;
+            private Runnable repeatAction = new Runnable() {
+                @Override public void run() {
+                    dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useBridge);
+                    long delay = isFirst ? INITIAL_DELAY : REPEAT_INTERVAL;
+                    isFirst = false;
+                    repeatHandler.postDelayed(this, delay);
+                }
+            };
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                switch(event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        v.setPressed(true);
+                        v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                        isFirst = true;
+                        repeatHandler.post(repeatAction);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.setPressed(false);
+                        repeatHandler.removeCallbacks(repeatAction);
+                        dispatch(name, js, ak, KeyEvent.ACTION_UP, useBridge);
+                        return true;
+                }
+                return false;
             }
-            return true;
         });
     }
 
     private void dispatch(String name, int js, int ak, int action, boolean useBridge) {
+        // 1. NATIVE ANDROID EVENT (Primary for Apps/Svelte)
+        // We dispatch this first so the system handles navigation/typing naturally
+        webView.dispatchKeyEvent(new KeyEvent(action, ak));
+
+        // 2. SMART JS INJECTION (Secondary for Game Engines)
         if (useBridge) {
             String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
-            // SMART BRIDGE: Only fire JS if the focus is on the BODY (Game mode)
-            // If focus is on a Svelte component (Button/Link), skip JS to prevent double-jump
-            String script = "if(document.activeElement === document.body || document.activeElement.tagName === 'CANVAS') {" +
-                            "  var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
-                            "  Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}});" +
-                            "  window.dispatchEvent(e); document.dispatchEvent(e);" +
-                            "}";
+            // Logic: Only fire JS if no input/textarea is focused
+            String script = "(function(){" +
+                "var a = document.activeElement; " +
+                "if(a.tagName !== 'INPUT' && a.tagName !== 'TEXTAREA' && !a.isContentEditable) {" +
+                "  var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
+                "  Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}});" +
+                "  window.dispatchEvent(e); document.dispatchEvent(e);" +
+                "}})();";
             webView.evaluateJavascript(script, null);
         }
 
-        // Always send Native (This moves focus in Svelte and types text)
-        webView.dispatchKeyEvent(new KeyEvent(action, ak));
         if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
 
@@ -133,7 +159,7 @@ public class MainActivity extends Activity {
             OutputStream os = getContentResolver().openOutputStream(getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv));
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
-            log("Saved Screenshot!");
+            log("Screenshot Saved!");
         } catch (Exception e) {}
     }
 
@@ -147,7 +173,7 @@ public class MainActivity extends Activity {
                 is.close();
                 webView.loadUrl("data:text/html;base64," + Base64.getEncoder().encodeToString(b));
                 defaultText.setVisibility(View.GONE);
-            } catch (Exception e) {}
+            } catch (Exception e) { log("Error Loading"); }
         }
     }
 }
