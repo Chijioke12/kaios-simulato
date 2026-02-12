@@ -65,7 +65,8 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- NAVIGATION & SYSTEM KEYS (Hybrid: JS + Native) ---
+        // --- NAVIGATION & SOFTKEYS (Dual-Signal: JS + Native) ---
+        // Games need JS, Svelte accepts Native for these
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP, true);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN, true);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT, true);
@@ -76,7 +77,8 @@ public class MainActivity extends Activity {
         setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2, true);
         setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL, true);
 
-        // --- CHARACTER KEYS (0-9, *, #) (Pure Native: No Double-Fire) ---
+        // --- CHARACTERS (Pure Native: No JS Injection) ---
+        // This keeps Svelte from double-firing
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         int[] akCodes = {7,8,9,10,11,12,13,14,15,16,17,18};
         String[] labels = {"0","1","2","3","4","5","6","7","8","9","*","#"};
@@ -118,16 +120,17 @@ public class MainActivity extends Activity {
     }
 
     private void dispatch(String name, int js, int ak, int action, boolean useJS) {
-        // Only run JS injection for navigation keys or games that need it
         if (useJS) {
             String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
+            // UNIVERSAL JS DISPATCH: window + document + property define
             String script = "var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
                             "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}}); " +
-                            "window.dispatchEvent(e);";
+                            "Object.defineProperty(e, 'which', {get:function(){return "+js+";}}); " +
+                            "window.dispatchEvent(e); document.dispatchEvent(e);";
             webView.evaluateJavascript(script, null);
         }
 
-        // Always use Native event (This handles Svelte typing and Android navigation)
+        // Always Native (Handles Svelte/System/Browsing)
         webView.dispatchKeyEvent(new KeyEvent(action, ak));
         if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
@@ -149,7 +152,7 @@ public class MainActivity extends Activity {
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
             log("Saved to Gallery!");
-        } catch (Exception e) { log("Error"); }
+        } catch (Exception e) {}
     }
 
     @Override
