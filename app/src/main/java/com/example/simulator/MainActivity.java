@@ -8,6 +8,7 @@ import android.graphics.Canvas;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.view.HapticFeedbackConstants;
@@ -73,7 +74,7 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- KEY MAPPINGS (Exact KaiOS Specs) ---
+        // --- KEY MAPPINGS ---
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
@@ -93,7 +94,6 @@ public class MainActivity extends Activity {
 
     private void wakeUpWebView() {
         webView.requestFocus();
-        // Simulate a touch to "start" game audio and listeners
         long time = SystemClock.uptimeMillis();
         webView.dispatchTouchEvent(MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN, 0, 0, 0));
         webView.dispatchTouchEvent(MotionEvent.obtain(time, time, MotionEvent.ACTION_UP, 0, 0, 0));
@@ -116,14 +116,12 @@ public class MainActivity extends Activity {
 
     private void trigger(String name, int js, int ak) {
         log("Press: " + name);
-        // FORCED INJECTION: Overrides read-only properties to force compatibility
         String script = "var e = new KeyboardEvent('keydown', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
                         "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}}); " +
                         "Object.defineProperty(e, 'which', {get:function(){return "+js+";}}); " +
                         "window.dispatchEvent(e); document.dispatchEvent(e);";
         webView.evaluateJavascript(script, null);
         
-        // Also send native event for engines that listen to the system
         webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
         webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
     }
