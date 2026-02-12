@@ -20,6 +20,7 @@ public class MainActivity extends Activity {
     private ScrollView logScroll;
     private Handler repeatHandler = new Handler();
     
+    // Exact timings for perfect long-press feel
     private static final int INITIAL_DELAY = 400; 
     private static final int REPEAT_INTERVAL = 120;
 
@@ -40,18 +41,14 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
         
-        // --- ADVANCED FOCUS SETTINGS ---
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
-        s.setNeedInitialFocus(true);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         
         webView.setWebViewClient(new WebViewClient());
 
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
-            String url = urlInput.getText().toString();
-            if(!url.startsWith("http")) url = "http://" + url;
-            webView.loadUrl(url);
+            webView.loadUrl("http://" + urlInput.getText().toString());
             defaultText.setVisibility(View.GONE);
             webView.requestFocus();
         });
@@ -70,22 +67,22 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- NAVIGATION: PURE NATIVE ---
-        // (Prevents double-jumping in Svelte focus management)
-        setupKey(R.id.btnUp, "Up", 0, KeyEvent.KEYCODE_DPAD_UP, false);
-        setupKey(R.id.btnDown, "Down", 0, KeyEvent.KEYCODE_DPAD_DOWN, false);
-        setupKey(R.id.btnLeft, "Left", 0, KeyEvent.KEYCODE_DPAD_LEFT, false);
-        setupKey(R.id.btnRight, "Right", 0, KeyEvent.KEYCODE_DPAD_RIGHT, false);
-
-        // --- ACTIONS: HYBRID ---
-        // Sending JS helps games and forces Svelte inputs to "activate"
+        // --- NAVIGATION: HYBRID + REPEAT ---
+        // Svelte needs Native to move focus, Games need JS to move characters
+        setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP, true);
+        setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN, true);
+        setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT, true);
+        setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT, true);
         setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER, true);
+
+        // --- SYSTEM: HYBRID + REPEAT ---
         setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1, true);
         setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2, true);
         setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL, true);
-        setupKey(R.id.btnEnd, "CLR", 8, KeyEvent.KEYCODE_DEL, true);
+        setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL, true);
 
-        // --- CHARACTERS: PURE NATIVE ---
+        // --- CHARACTERS: NATIVE ONLY + REPEAT ---
+        // Native-only prevents double-typing in Svelte/Pure JS
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
         for(int i=0; i<ids.length; i++) setupKey(ids[i], String.valueOf(i), 0, ak[i], false);
@@ -95,35 +92,48 @@ public class MainActivity extends Activity {
         View v = findViewById(id);
         if (v == null) return;
 
-        v.setOnTouchListener((view, event) -> {
-            if(event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.setPressed(true);
-                v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useJS);
-            } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                v.setPressed(false);
-                dispatch(name, js, ak, KeyEvent.ACTION_UP, useJS);
+        v.setOnTouchListener(new View.OnTouchListener() {
+            private boolean isFirst = true;
+            private Runnable repeatAction = new Runnable() {
+                @Override public void run() {
+                    dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useJS);
+                    long delay = isFirst ? INITIAL_DELAY : REPEAT_INTERVAL;
+                    isFirst = false;
+                    repeatHandler.postDelayed(this, delay);
+                }
+            };
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                if(event.getAction() == MotionEvent.ACTION_DOWN) {
+                    v.setPressed(true);
+                    v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                    isFirst = true;
+                    repeatHandler.post(repeatAction);
+                } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                    v.setPressed(false);
+                    repeatHandler.removeCallbacks(repeatAction);
+                    dispatch(name, js, ak, KeyEvent.ACTION_UP, useJS);
+                }
+                return true;
             }
-            return true;
         });
     }
 
     private void dispatch(String name, int js, int ak, int action, boolean useJS) {
         if (useJS) {
             String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
-            // POWERFUL OK LOGIC: If we press Enter/OK, force focus on the active element
-            // This is what makes input fields "engage" in Svelte apps
+            // SMART SVELTE KEYBOARD BRIDGE: 
+            // If focus hits an input during navigation, force a focus/click to pop keyboard.
             String script = "var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
                             "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}});" +
                             "window.dispatchEvent(e); document.dispatchEvent(e);" +
-                            "if('"+name+"' === 'Enter' && '"+type+"' === 'keydown') { " +
-                            "  if(document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {" +
-                            "    document.activeElement.focus(); document.activeElement.click(); " +
-                            "  }" +
+                            "if(document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {" +
+                            "  document.activeElement.focus();" +
                             "}";
             webView.evaluateJavascript(script, null);
         }
 
+        // Native signals are mandatory for Apps and Svelte Focus management
         webView.dispatchKeyEvent(new KeyEvent(action, ak));
         if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
