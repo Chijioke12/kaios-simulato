@@ -41,15 +41,7 @@ public class MainActivity extends Activity {
         
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
-
-        // --- THE BRIDGE INJECTION ---
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                injectBridge(); // Inject our filter script when page loads
-                log("Bridge Connected");
-            }
-        });
+        webView.setWebViewClient(new WebViewClient());
 
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString();
@@ -73,46 +65,39 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- MAP ALL KEYS ---
-        setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
-        setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
-        setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
-        setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
-        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
-        setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
-        setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
-        setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
-        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL);
+        // --- NAVIGATION & SYSTEM KEYS (Hybrid: JS + Native) ---
+        setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP, true);
+        setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN, true);
+        setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT, true);
+        setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT, true);
+        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER, true);
+        setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL, true);
+        setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1, true);
+        setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2, true);
+        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL, true);
 
+        // --- CHARACTER KEYS (0-9, *, #) (Pure Native: No Double-Fire) ---
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
-        int[] js = {48,49,50,51,52,53,54,55,56,57,42,35};
-        int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
-        for(int i=0; i<ids.length; i++) setupKey(ids[i], String.valueOf(i), js[i], ak[i]);
+        int[] akCodes = {7,8,9,10,11,12,13,14,15,16,17,18};
+        String[] labels = {"0","1","2","3","4","5","6","7","8","9","*","#"};
+
+        for(int i=0; i<ids.length; i++) {
+            setupKey(ids[i], labels[i], 0, akCodes[i], false);
+        }
     }
 
-    private void injectBridge() {
-        // This JS logic checks if an input is focused. If yes, it BLOCKS the JS event to prevent double-firing.
-        String script = "window.KAIOS_BRIDGE = function(type, name, code) {" +
-                        "  var active = document.activeElement.tagName; " +
-                        "  if(active === 'INPUT' || active === 'TEXTAREA' || document.activeElement.isContentEditable) return; " +
-                        "  var e = new KeyboardEvent(type, {key:name, keyCode:code, which:code, bubbles:true});" +
-                        "  Object.defineProperty(e, 'keyCode', {get:function(){return code;}}); " +
-                        "  window.dispatchEvent(e); document.dispatchEvent(e);" +
-                        "};";
-        webView.evaluateJavascript(script, null);
-    }
-
-    private void setupKey(int id, final String name, final int js, final int ak) {
+    private void setupKey(int id, final String name, final int js, final int ak, final boolean useJS) {
         View v = findViewById(id);
         if (v == null) return;
+
         v.setOnTouchListener(new View.OnTouchListener() {
             private boolean isFirst = true;
-            private Runnable repeat = new Runnable() {
+            private Runnable repeatRunnable = new Runnable() {
                 @Override public void run() {
-                    dispatch(name, js, ak, KeyEvent.ACTION_DOWN);
-                    long d = isFirst ? INITIAL_DELAY : REPEAT_INTERVAL;
+                    dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useJS);
+                    long delay = isFirst ? INITIAL_DELAY : REPEAT_INTERVAL;
                     isFirst = false;
-                    repeatHandler.postDelayed(this, d);
+                    repeatHandler.postDelayed(this, delay);
                 }
             };
             @Override
@@ -121,22 +106,28 @@ public class MainActivity extends Activity {
                     v.setPressed(true);
                     v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
                     isFirst = true;
-                    repeatHandler.post(repeat);
+                    repeatHandler.post(repeatRunnable);
                 } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
                     v.setPressed(false);
-                    repeatHandler.removeCallbacks(repeat);
-                    dispatch(name, js, ak, KeyEvent.ACTION_UP);
+                    repeatHandler.removeCallbacks(repeatRunnable);
+                    dispatch(name, js, ak, KeyEvent.ACTION_UP, useJS);
                 }
                 return true;
             }
         });
     }
 
-    private void dispatch(String name, int js, int ak, int action) {
-        String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
-        // Call the Bridge
-        webView.evaluateJavascript("if(window.KAIOS_BRIDGE) KAIOS_BRIDGE('"+type+"','"+name+"',"+js+");", null);
-        // Dispatch native
+    private void dispatch(String name, int js, int ak, int action, boolean useJS) {
+        // Only run JS injection for navigation keys or games that need it
+        if (useJS) {
+            String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
+            String script = "var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
+                            "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}}); " +
+                            "window.dispatchEvent(e);";
+            webView.evaluateJavascript(script, null);
+        }
+
+        // Always use Native event (This handles Svelte typing and Android navigation)
         webView.dispatchKeyEvent(new KeyEvent(action, ak));
         if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
@@ -157,8 +148,8 @@ public class MainActivity extends Activity {
             OutputStream os = getContentResolver().openOutputStream(getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv));
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
-            log("Screenshot Saved!");
-        } catch (Exception e) {}
+            log("Saved to Gallery!");
+        } catch (Exception e) { log("Error"); }
     }
 
     @Override
