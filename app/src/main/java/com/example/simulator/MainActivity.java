@@ -24,11 +24,7 @@ public class MainActivity extends Activity {
     private WebView webView;
     private TextView keyLogger, defaultText;
     private ScrollView logScroll;
-    private Handler repeatHandler = new Handler();
     
-    private static final int INITIAL_DELAY = 300; 
-    private static final int REPEAT_INTERVAL = 100;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -44,7 +40,6 @@ public class MainActivity extends Activity {
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
-        s.setDatabaseEnabled(true);
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
         
@@ -74,22 +69,56 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- KEY MAPPINGS ---
-        setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
-        setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
-        setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
-        setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
-        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
-        setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
-        setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
-        setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
-        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_F3);
+        // --- MAP ALL KEYS WITH THE NEW GAME-READY LOGIC ---
+        setupGameKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP);
+        setupGameKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN);
+        setupGameKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT);
+        setupGameKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT);
+        setupGameKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER);
+        setupGameKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL);
+        setupGameKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1);
+        setupGameKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2);
+        setupGameKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_F3);
 
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         String[] names = {"0","1","2","3","4","5","6","7","8","9","*","#"};
         int[] js = {48,49,50,51,52,53,54,55,56,57,42,35};
         int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
-        for(int i=0; i<ids.length; i++) setupKey(ids[i], names[i], js[i], ak[i]);
+        for(int i=0; i<ids.length; i++) setupGameKey(ids[i], names[i], js[i], ak[i]);
+    }
+
+    private void setupGameKey(int id, final String name, final int jsCode, final int akCode) {
+        View v = findViewById(id);
+        if (v == null) return;
+
+        v.setOnTouchListener((view, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.setPressed(true);
+                v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                // Send KEYDOWN to both JS and Android
+                sendKeyEvent("keydown", name, jsCode, akCode, KeyEvent.ACTION_DOWN);
+                log("Down: " + name);
+            } 
+            else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                v.setPressed(false);
+                // Send KEYUP to both JS and Android (Crucial for Games!)
+                sendKeyEvent("keyup", name, jsCode, akCode, KeyEvent.ACTION_UP);
+                log("Up: " + name);
+            }
+            return true;
+        });
+    }
+
+    private void sendKeyEvent(String type, String name, int js, int ak, int action) {
+        // 1. Precise JS Injection
+        String script = "var e = new KeyboardEvent('" + type + "', {key:'" + name + "', keyCode:" + js + ", which:" + js + ", bubbles:true});" +
+                        "Object.defineProperty(e, 'keyCode', {get:function(){return " + js + ";}}); " +
+                        "Object.defineProperty(e, 'which', {get:function(){return " + js + ";}}); " +
+                        "window.dispatchEvent(e); document.dispatchEvent(e);";
+        webView.evaluateJavascript(script, null);
+
+        // 2. Native Android Dispatch
+        webView.dispatchKeyEvent(new KeyEvent(action, ak));
     }
 
     private void wakeUpWebView() {
@@ -97,33 +126,6 @@ public class MainActivity extends Activity {
         long time = SystemClock.uptimeMillis();
         webView.dispatchTouchEvent(MotionEvent.obtain(time, time, MotionEvent.ACTION_DOWN, 0, 0, 0));
         webView.dispatchTouchEvent(MotionEvent.obtain(time, time, MotionEvent.ACTION_UP, 0, 0, 0));
-    }
-
-    private void setupKey(int id, final String name, final int jsCode, final int akCode) {
-        final View v = findViewById(id);
-        if (v == null) return;
-        v.setOnTouchListener((view, event) -> {
-            if(event.getAction() == MotionEvent.ACTION_DOWN) {
-                v.setPressed(true);
-                v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                trigger(name, jsCode, akCode);
-            } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
-                v.setPressed(false);
-            }
-            return true;
-        });
-    }
-
-    private void trigger(String name, int js, int ak) {
-        log("Press: " + name);
-        String script = "var e = new KeyboardEvent('keydown', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
-                        "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}}); " +
-                        "Object.defineProperty(e, 'which', {get:function(){return "+js+";}}); " +
-                        "window.dispatchEvent(e); document.dispatchEvent(e);";
-        webView.evaluateJavascript(script, null);
-        
-        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, ak));
-        webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, ak));
     }
 
     private void log(String m) {
