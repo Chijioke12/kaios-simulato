@@ -39,8 +39,13 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
+        
+        // --- ADVANCED FOCUS SETTINGS ---
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
+        s.setNeedInitialFocus(true);
+        s.setJavaScriptCanOpenWindowsAutomatically(true);
+        
         webView.setWebViewClient(new WebViewClient());
 
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
@@ -65,23 +70,22 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- THE FRAMEWORK-AWARE MAPPING ---
-        
-        // DPAD & Enter: PURE NATIVE (WebView translates these to JS perfectly for Svelte/Games)
-        // This fixes the double-fire and the navigation inversion.
+        // --- NAVIGATION: PURE NATIVE ---
+        // (Prevents double-jumping in Svelte focus management)
         setupKey(R.id.btnUp, "Up", 0, KeyEvent.KEYCODE_DPAD_UP, false);
         setupKey(R.id.btnDown, "Down", 0, KeyEvent.KEYCODE_DPAD_DOWN, false);
         setupKey(R.id.btnLeft, "Left", 0, KeyEvent.KEYCODE_DPAD_LEFT, false);
         setupKey(R.id.btnRight, "Right", 0, KeyEvent.KEYCODE_DPAD_RIGHT, false);
-        setupKey(R.id.btnOk, "OK", 0, KeyEvent.KEYCODE_ENTER, false);
-        setupKey(R.id.btnEnd, "CLR", 0, KeyEvent.KEYCODE_DEL, false);
 
-        // Softkeys & Call: HYBRID (Android has no native translation for these strings)
+        // --- ACTIONS: HYBRID ---
+        // Sending JS helps games and forces Svelte inputs to "activate"
+        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER, true);
         setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1, true);
         setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2, true);
         setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL, true);
+        setupKey(R.id.btnEnd, "CLR", 8, KeyEvent.KEYCODE_DEL, true);
 
-        // Numbers: PURE NATIVE (Stops Svelte double-typing numbers)
+        // --- CHARACTERS: PURE NATIVE ---
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
         for(int i=0; i<ids.length; i++) setupKey(ids[i], String.valueOf(i), 0, ak[i], false);
@@ -91,51 +95,36 @@ public class MainActivity extends Activity {
         View v = findViewById(id);
         if (v == null) return;
 
-        v.setOnTouchListener(new View.OnTouchListener() {
-            private boolean isFirst = true;
-            private Runnable repeatAction = new Runnable() {
-                @Override public void run() {
-                    dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useJS);
-                    long delay = isFirst ? INITIAL_DELAY : REPEAT_INTERVAL;
-                    isFirst = false;
-                    repeatHandler.postDelayed(this, delay);
-                }
-            };
-            @Override
-            public boolean onTouch(View view, MotionEvent event) {
-                switch(event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        v.setPressed(true);
-                        v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                        isFirst = true;
-                        repeatHandler.post(repeatAction);
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        v.setPressed(false);
-                        repeatHandler.removeCallbacks(repeatAction);
-                        dispatch(name, js, ak, KeyEvent.ACTION_UP, useJS);
-                        return true;
-                }
-                return false;
+        v.setOnTouchListener((view, event) -> {
+            if(event.getAction() == MotionEvent.ACTION_DOWN) {
+                v.setPressed(true);
+                v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useJS);
+            } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                v.setPressed(false);
+                dispatch(name, js, ak, KeyEvent.ACTION_UP, useJS);
             }
+            return true;
         });
     }
 
     private void dispatch(String name, int js, int ak, int action, boolean useJS) {
-        // Only inject JS for keys that Android can't translate (Softkeys)
         if (useJS) {
             String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
+            // POWERFUL OK LOGIC: If we press Enter/OK, force focus on the active element
+            // This is what makes input fields "engage" in Svelte apps
             String script = "var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
-                            "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}}); " +
-                            "window.dispatchEvent(e); document.dispatchEvent(e);";
+                            "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}});" +
+                            "window.dispatchEvent(e); document.dispatchEvent(e);" +
+                            "if('"+name+"' === 'Enter' && '"+type+"' === 'keydown') { " +
+                            "  if(document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {" +
+                            "    document.activeElement.focus(); document.activeElement.click(); " +
+                            "  }" +
+                            "}";
             webView.evaluateJavascript(script, null);
         }
 
-        // Send Native event for everything
-        // For Navigation/Numbers, this is the only event sent (prevents Svelte double-fire)
         webView.dispatchKeyEvent(new KeyEvent(action, ak));
-        
         if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
 
@@ -155,8 +144,8 @@ public class MainActivity extends Activity {
             OutputStream os = getContentResolver().openOutputStream(getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv));
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
-            log("Saved to Gallery!");
-        } catch (Exception e) { log("Error"); }
+            log("Saved Screenshot!");
+        } catch (Exception e) {}
     }
 
     @Override
@@ -169,6 +158,7 @@ public class MainActivity extends Activity {
                 is.close();
                 webView.loadUrl("data:text/html;base64," + Base64.getEncoder().encodeToString(b));
                 defaultText.setVisibility(View.GONE);
+                webView.requestFocus();
             } catch (Exception e) {}
         }
     }
