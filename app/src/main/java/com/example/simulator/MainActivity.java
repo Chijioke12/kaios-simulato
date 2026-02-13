@@ -34,46 +34,63 @@ public class MainActivity extends Activity {
         defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
+        // WebView Settings
         webView.setBackgroundColor(0xFF1E1E1E);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
+        s.setAllowContentAccess(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
         webView.setWebViewClient(new WebViewClient());
 
+        // LOAD BUTTON (with Localhost 127.0.0.1 fix)
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString().trim();
             if (url.isEmpty()) url = "localhost:5173";
             if (url.contains("localhost")) url = url.replace("localhost", "127.0.0.1");
             if (!url.startsWith("http")) url = "http://" + url;
+            
+            log("Loading: " + url);
             webView.loadUrl(url);
             defaultText.setVisibility(View.GONE);
             webView.requestFocus();
         });
 
+        // UPLOAD HTML BUTTON
+        findViewById(R.id.btnUpload).setOnClickListener(v -> {
+            Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+            i.setType("text/html");
+            startActivityForResult(i, 101);
+        });
+
+        // CLEAR BUTTON
         findViewById(R.id.btnClear).setOnClickListener(v -> {
             webView.loadUrl("about:blank");
             defaultText.setVisibility(View.VISIBLE);
+            log("Cleared");
         });
 
-        // --- MAPPINGS ---
+        // SCREENSHOT BUTTON
+        findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
+
+        // --- KEY MAPPINGS ---
         
-        // 1. NATIVE ONLY (Perfect for D-pad & Numpad, no double fire)
+        // 1. NATIVE ONLY (D-pad & Numpad) - No Double Fire
         setupKey(R.id.btnUp, "Up", KeyEvent.KEYCODE_DPAD_UP, 0, false);
         setupKey(R.id.btnDown, "Down", KeyEvent.KEYCODE_DPAD_DOWN, 0, false);
         setupKey(R.id.btnLeft, "Left", KeyEvent.KEYCODE_DPAD_LEFT, 0, false);
         setupKey(R.id.btnRight, "Right", KeyEvent.KEYCODE_DPAD_RIGHT, 0, false);
         setupKey(R.id.btnOk, "Enter", KeyEvent.KEYCODE_ENTER, 0, false);
 
-        // 2. JS ONLY (Required for SoftKeys so the web app sees "SoftLeft" string)
+        // 2. JS ONLY (SoftKeys & Call) - KaiOS Compatibility
         setupKey(R.id.btnSoftLeft, "SoftLeft", 0, 112, true);
         setupKey(R.id.btnSoftRight, "SoftRight", 0, 113, true);
         setupKey(R.id.btnCall, "Call", 0, 114, true);
-        setupKey(R.id.btnEnd, "Backspace", KeyEvent.KEYCODE_DEL, 8, false); // Backspace works best native
+        setupKey(R.id.btnEnd, "Backspace", KeyEvent.KEYCODE_DEL, 8, false);
 
         // 3. NUMPAD (Native Only)
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
@@ -131,19 +148,47 @@ public class MainActivity extends Activity {
         });
     }
 
+    // SAVES SCREENSHOT TO GALLERY
     private void saveScreenshot() {
         try {
             Bitmap b = Bitmap.createBitmap(webView.getWidth(), webView.getHeight(), Bitmap.Config.ARGB_8888);
             webView.draw(new Canvas(b));
             ContentValues cv = new ContentValues();
-            cv.put(MediaStore.Images.Media.DISPLAY_NAME, "sim_" + System.currentTimeMillis() + ".png");
+            cv.put(MediaStore.Images.Media.DISPLAY_NAME, "kaios_" + System.currentTimeMillis() + ".png");
             cv.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
             cv.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES);
+            
             Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv);
-            OutputStream os = getContentResolver().openOutputStream(uri);
-            b.compress(Bitmap.CompressFormat.PNG, 100, os);
-            os.close();
-            log("Saved Screenshot!");
-        } catch (Exception e) {}
+            if (uri != null) {
+                OutputStream os = getContentResolver().openOutputStream(uri);
+                b.compress(Bitmap.CompressFormat.PNG, 100, os);
+                os.close();
+                log("Screenshot saved to Gallery!");
+            }
+        } catch (Exception e) {
+            log("Screenshot failed: " + e.getMessage());
+        }
+    }
+
+    // HANDLES HTML FILE UPLOAD
+    @Override
+    protected void onActivityResult(int req, int res, Intent d) {
+        if (req == 101 && res == RESULT_OK && d != null) {
+            try {
+                InputStream is = getContentResolver().openInputStream(d.getData());
+                ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                byte[] buffer = new byte[1024];
+                int len;
+                while ((len = is.read(buffer)) != -1) bos.write(buffer, 0, len);
+                is.close();
+                
+                String encoded = Base64.getEncoder().encodeToString(bos.toByteArray());
+                webView.loadUrl("data:text/html;base64," + encoded);
+                defaultText.setVisibility(View.GONE);
+                log("HTML File Uploaded!");
+            } catch (Exception e) {
+                log("Upload Failed: " + e.getMessage());
+            }
+        }
     }
 }
