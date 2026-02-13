@@ -20,7 +20,6 @@ public class MainActivity extends Activity {
     private ScrollView logScroll;
     private Handler repeatHandler = new Handler();
     
-    // Exact timings for perfect long-press feel
     private static final int INITIAL_DELAY = 400; 
     private static final int REPEAT_INTERVAL = 120;
 
@@ -35,20 +34,42 @@ public class MainActivity extends Activity {
         defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
+        // WEBVIEW SETTINGS FOR LOCALHOST
         webView.setBackgroundColor(0xFF1E1E1E);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
+        s.setAllowContentAccess(true);
+        s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
         s.setJavaScriptCanOpenWindowsAutomatically(true);
         
-        webView.setWebViewClient(new WebViewClient());
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                log("Load Error: " + error.getDescription());
+            }
+        });
 
+        // LOAD BUTTON LOGIC WITH LOCALHOST TRANSLATION
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
-            webView.loadUrl("http://" + urlInput.getText().toString());
+            String url = urlInput.getText().toString().trim();
+            if (url.isEmpty()) url = "localhost:8080";
+
+            // If user types 'localhost', redirect to the Android Host Loopback
+            if (url.contains("localhost")) {
+                url = url.replace("localhost", "10.0.2.2");
+            }
+
+            if (!url.startsWith("http")) {
+                url = "http://" + url;
+            }
+
+            log("Navigating to: " + url);
+            webView.loadUrl(url);
             defaultText.setVisibility(View.GONE);
             webView.requestFocus();
         });
@@ -67,22 +88,17 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // --- NAVIGATION: HYBRID + REPEAT ---
-        // Svelte needs Native to move focus, Games need JS to move characters
+        // KEYBOARD MAPPINGS
         setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP, true);
         setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN, true);
         setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT, true);
         setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT, true);
         setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER, true);
-
-        // --- SYSTEM: HYBRID + REPEAT ---
         setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1, true);
         setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2, true);
         setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL, true);
         setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL, true);
 
-        // --- CHARACTERS: NATIVE ONLY + REPEAT ---
-        // Native-only prevents double-typing in Svelte/Pure JS
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
         int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
         for(int i=0; i<ids.length; i++) setupKey(ids[i], String.valueOf(i), 0, ak[i], false);
@@ -91,7 +107,6 @@ public class MainActivity extends Activity {
     private void setupKey(int id, final String name, final int js, final int ak, final boolean useJS) {
         View v = findViewById(id);
         if (v == null) return;
-
         v.setOnTouchListener(new View.OnTouchListener() {
             private boolean isFirst = true;
             private Runnable repeatAction = new Runnable() {
@@ -122,25 +137,23 @@ public class MainActivity extends Activity {
     private void dispatch(String name, int js, int ak, int action, boolean useJS) {
         if (useJS) {
             String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
-            // SMART SVELTE KEYBOARD BRIDGE: 
-            // If focus hits an input during navigation, force a focus/click to pop keyboard.
             String script = "var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
                             "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}});" +
                             "window.dispatchEvent(e); document.dispatchEvent(e);" +
-                            "if(document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {" +
+                            "if(document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {" +
                             "  document.activeElement.focus();" +
                             "}";
             webView.evaluateJavascript(script, null);
         }
-
-        // Native signals are mandatory for Apps and Svelte Focus management
         webView.dispatchKeyEvent(new KeyEvent(action, ak));
         if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
 
     private void log(String m) {
-        keyLogger.append("\n> " + m);
-        logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
+        runOnUiThread(() -> {
+            keyLogger.append("\n> " + m);
+            logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
+        });
     }
 
     private void saveScreenshot() {
@@ -151,11 +164,12 @@ public class MainActivity extends Activity {
             cv.put(MediaStore.Images.Media.DISPLAY_NAME, "sim_" + System.currentTimeMillis() + ".png");
             cv.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
             cv.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES);
-            OutputStream os = getContentResolver().openOutputStream(getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv));
+            Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, cv);
+            OutputStream os = getContentResolver().openOutputStream(uri);
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
             log("Saved Screenshot!");
-        } catch (Exception e) {}
+        } catch (Exception e) { log("Capture Failed"); }
     }
 
     @Override
@@ -169,7 +183,7 @@ public class MainActivity extends Activity {
                 webView.loadUrl("data:text/html;base64," + Base64.getEncoder().encodeToString(b));
                 defaultText.setVisibility(View.GONE);
                 webView.requestFocus();
-            } catch (Exception e) {}
+            } catch (Exception e) { log("File Load Failed"); }
         }
     }
 }
