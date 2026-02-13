@@ -34,50 +34,34 @@ public class MainActivity extends Activity {
         defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
-        // WEBVIEW SETTINGS FOR LOCALHOST
+        // WebView Settings
         webView.setBackgroundColor(0xFF1E1E1E);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
-        s.setAllowContentAccess(true);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
-        s.setJavaScriptCanOpenWindowsAutomatically(true);
         
-        webView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                log("Load Error: " + error.getDescription());
-            }
-        });
+        webView.setWebViewClient(new WebViewClient());
 
-        // LOAD BUTTON LOGIC WITH LOCALHOST TRANSLATION
+        // Load Logic with localhost -> 127.0.0.1 fix
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString().trim();
-            if (url.isEmpty()) url = "localhost:8080";
+            if (url.isEmpty()) url = "localhost:5173";
 
-            // If user types 'localhost', redirect to the Android Host Loopback
             if (url.contains("localhost")) {
-                url = url.replace("localhost", "10.0.2.2");
+                url = url.replace("localhost", "127.0.0.1");
             }
 
-            if (!url.startsWith("http")) {
-                url = "http://" + url;
-            }
+            if (!url.startsWith("http")) url = "http://" + url;
 
-            log("Navigating to: " + url);
+            log("Loading: " + url);
             webView.loadUrl(url);
             defaultText.setVisibility(View.GONE);
             webView.requestFocus();
-        });
-
-        findViewById(R.id.btnUpload).setOnClickListener(v -> {
-            Intent i = new Intent(Intent.ACTION_GET_CONTENT);
-            i.setType("text/html");
-            startActivityForResult(i, 101);
         });
 
         findViewById(R.id.btnClear).setOnClickListener(v -> {
@@ -88,30 +72,42 @@ public class MainActivity extends Activity {
 
         findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
 
-        // KEYBOARD MAPPINGS
-        setupKey(R.id.btnUp, "ArrowUp", 38, KeyEvent.KEYCODE_DPAD_UP, true);
-        setupKey(R.id.btnDown, "ArrowDown", 40, KeyEvent.KEYCODE_DPAD_DOWN, true);
-        setupKey(R.id.btnLeft, "ArrowLeft", 37, KeyEvent.KEYCODE_DPAD_LEFT, true);
-        setupKey(R.id.btnRight, "ArrowRight", 39, KeyEvent.KEYCODE_DPAD_RIGHT, true);
-        setupKey(R.id.btnOk, "Enter", 13, KeyEvent.KEYCODE_ENTER, true);
-        setupKey(R.id.btnSoftLeft, "SoftLeft", 112, KeyEvent.KEYCODE_F1, true);
-        setupKey(R.id.btnSoftRight, "SoftRight", 113, KeyEvent.KEYCODE_F2, true);
-        setupKey(R.id.btnCall, "Call", 114, KeyEvent.KEYCODE_CALL, true);
-        setupKey(R.id.btnEnd, "Backspace", 8, KeyEvent.KEYCODE_DEL, true);
+        // --- NATIVE KEY MAPPINGS ---
+        setupKey(R.id.btnUp, "Up", KeyEvent.KEYCODE_DPAD_UP);
+        setupKey(R.id.btnDown, "Down", KeyEvent.KEYCODE_DPAD_DOWN);
+        setupKey(R.id.btnLeft, "Left", KeyEvent.KEYCODE_DPAD_LEFT);
+        setupKey(R.id.btnRight, "Right", KeyEvent.KEYCODE_DPAD_RIGHT);
+        setupKey(R.id.btnOk, "OK", KeyEvent.KEYCODE_ENTER);
+        
+        // System Keys (Standard KaiOS mapping)
+        setupKey(R.id.btnSoftLeft, "SoftLeft", KeyEvent.KEYCODE_F1);
+        setupKey(R.id.btnSoftRight, "SoftRight", KeyEvent.KEYCODE_F2);
+        setupKey(R.id.btnCall, "Call", KeyEvent.KEYCODE_CALL);
+        setupKey(R.id.btnEnd, "CLR", KeyEvent.KEYCODE_DEL);
 
+        // Numpad
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
-        int[] ak = {7,8,9,10,11,12,13,14,15,16,17,18};
-        for(int i=0; i<ids.length; i++) setupKey(ids[i], String.valueOf(i), 0, ak[i], false);
+        int[] codes = {
+            KeyEvent.KEYCODE_0, KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_2, 
+            KeyEvent.KEYCODE_3, KeyEvent.KEYCODE_4, KeyEvent.KEYCODE_5, 
+            KeyEvent.KEYCODE_6, KeyEvent.KEYCODE_7, KeyEvent.KEYCODE_8, 
+            KeyEvent.KEYCODE_9, KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_POUND
+        };
+        String[] labels = {"0","1","2","3","4","5","6","7","8","9","*","#"};
+        
+        for(int i=0; i<ids.length; i++) {
+            setupKey(ids[i], labels[i], codes[i]);
+        }
     }
 
-    private void setupKey(int id, final String name, final int js, final int ak, final boolean useJS) {
+    private void setupKey(int id, final String name, final int keyCode) {
         View v = findViewById(id);
         if (v == null) return;
         v.setOnTouchListener(new View.OnTouchListener() {
             private boolean isFirst = true;
             private Runnable repeatAction = new Runnable() {
                 @Override public void run() {
-                    dispatch(name, js, ak, KeyEvent.ACTION_DOWN, useJS);
+                    webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keyCode));
                     long delay = isFirst ? INITIAL_DELAY : REPEAT_INTERVAL;
                     isFirst = false;
                     repeatHandler.postDelayed(this, delay);
@@ -122,31 +118,17 @@ public class MainActivity extends Activity {
                 if(event.getAction() == MotionEvent.ACTION_DOWN) {
                     v.setPressed(true);
                     v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+                    log("Press: " + name);
                     isFirst = true;
                     repeatHandler.post(repeatAction);
                 } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
                     v.setPressed(false);
                     repeatHandler.removeCallbacks(repeatAction);
-                    dispatch(name, js, ak, KeyEvent.ACTION_UP, useJS);
+                    webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, keyCode));
                 }
                 return true;
             }
         });
-    }
-
-    private void dispatch(String name, int js, int ak, int action, boolean useJS) {
-        if (useJS) {
-            String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
-            String script = "var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
-                            "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}});" +
-                            "window.dispatchEvent(e); document.dispatchEvent(e);" +
-                            "if(document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {" +
-                            "  document.activeElement.focus();" +
-                            "}";
-            webView.evaluateJavascript(script, null);
-        }
-        webView.dispatchKeyEvent(new KeyEvent(action, ak));
-        if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
 
     private void log(String m) {
@@ -170,20 +152,5 @@ public class MainActivity extends Activity {
             os.close();
             log("Saved Screenshot!");
         } catch (Exception e) { log("Capture Failed"); }
-    }
-
-    @Override
-    protected void onActivityResult(int req, int res, Intent d) {
-        if (req == 101 && res == RESULT_OK && d != null) {
-            try {
-                InputStream is = getContentResolver().openInputStream(d.getData());
-                byte[] b = new byte[is.available()];
-                is.read(b);
-                is.close();
-                webView.loadUrl("data:text/html;base64," + Base64.getEncoder().encodeToString(b));
-                defaultText.setVisibility(View.GONE);
-                webView.requestFocus();
-            } catch (Exception e) { log("File Load Failed"); }
-        }
     }
 }
