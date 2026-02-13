@@ -34,7 +34,6 @@ public class MainActivity extends Activity {
         defaultText = findViewById(R.id.defaultText);
         EditText urlInput = findViewById(R.id.urlInput);
 
-        // WebView Settings
         webView.setBackgroundColor(0xFF1E1E1E);
         WebSettings s = webView.getSettings();
         s.setJavaScriptEnabled(true);
@@ -44,21 +43,13 @@ public class MainActivity extends Activity {
         
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
-        
         webView.setWebViewClient(new WebViewClient());
 
-        // Load Logic with localhost -> 127.0.0.1 fix
         findViewById(R.id.btnLoad).setOnClickListener(v -> {
             String url = urlInput.getText().toString().trim();
             if (url.isEmpty()) url = "localhost:5173";
-
-            if (url.contains("localhost")) {
-                url = url.replace("localhost", "127.0.0.1");
-            }
-
+            if (url.contains("localhost")) url = url.replace("localhost", "127.0.0.1");
             if (!url.startsWith("http")) url = "http://" + url;
-
-            log("Loading: " + url);
             webView.loadUrl(url);
             defaultText.setVisibility(View.GONE);
             webView.requestFocus();
@@ -67,47 +58,37 @@ public class MainActivity extends Activity {
         findViewById(R.id.btnClear).setOnClickListener(v -> {
             webView.loadUrl("about:blank");
             defaultText.setVisibility(View.VISIBLE);
-            log("Cleared");
         });
 
-        findViewById(R.id.btnScreenshot).setOnClickListener(v -> saveScreenshot());
-
-        // --- NATIVE KEY MAPPINGS ---
-        setupKey(R.id.btnUp, "Up", KeyEvent.KEYCODE_DPAD_UP);
-        setupKey(R.id.btnDown, "Down", KeyEvent.KEYCODE_DPAD_DOWN);
-        setupKey(R.id.btnLeft, "Left", KeyEvent.KEYCODE_DPAD_LEFT);
-        setupKey(R.id.btnRight, "Right", KeyEvent.KEYCODE_DPAD_RIGHT);
-        setupKey(R.id.btnOk, "OK", KeyEvent.KEYCODE_ENTER);
+        // --- MAPPINGS ---
         
-        // System Keys (Standard KaiOS mapping)
-        setupKey(R.id.btnSoftLeft, "SoftLeft", KeyEvent.KEYCODE_F1);
-        setupKey(R.id.btnSoftRight, "SoftRight", KeyEvent.KEYCODE_F2);
-        setupKey(R.id.btnCall, "Call", KeyEvent.KEYCODE_CALL);
-        setupKey(R.id.btnEnd, "CLR", KeyEvent.KEYCODE_DEL);
+        // 1. NATIVE ONLY (Perfect for D-pad & Numpad, no double fire)
+        setupKey(R.id.btnUp, "Up", KeyEvent.KEYCODE_DPAD_UP, 0, false);
+        setupKey(R.id.btnDown, "Down", KeyEvent.KEYCODE_DPAD_DOWN, 0, false);
+        setupKey(R.id.btnLeft, "Left", KeyEvent.KEYCODE_DPAD_LEFT, 0, false);
+        setupKey(R.id.btnRight, "Right", KeyEvent.KEYCODE_DPAD_RIGHT, 0, false);
+        setupKey(R.id.btnOk, "Enter", KeyEvent.KEYCODE_ENTER, 0, false);
 
-        // Numpad
+        // 2. JS ONLY (Required for SoftKeys so the web app sees "SoftLeft" string)
+        setupKey(R.id.btnSoftLeft, "SoftLeft", 0, 112, true);
+        setupKey(R.id.btnSoftRight, "SoftRight", 0, 113, true);
+        setupKey(R.id.btnCall, "Call", 0, 114, true);
+        setupKey(R.id.btnEnd, "Backspace", KeyEvent.KEYCODE_DEL, 8, false); // Backspace works best native
+
+        // 3. NUMPAD (Native Only)
         int[] ids = {R.id.btn0, R.id.btn1, R.id.btn2, R.id.btn3, R.id.btn4, R.id.btn5, R.id.btn6, R.id.btn7, R.id.btn8, R.id.btn9, R.id.btnStar, R.id.btnHash};
-        int[] codes = {
-            KeyEvent.KEYCODE_0, KeyEvent.KEYCODE_1, KeyEvent.KEYCODE_2, 
-            KeyEvent.KEYCODE_3, KeyEvent.KEYCODE_4, KeyEvent.KEYCODE_5, 
-            KeyEvent.KEYCODE_6, KeyEvent.KEYCODE_7, KeyEvent.KEYCODE_8, 
-            KeyEvent.KEYCODE_9, KeyEvent.KEYCODE_STAR, KeyEvent.KEYCODE_POUND
-        };
-        String[] labels = {"0","1","2","3","4","5","6","7","8","9","*","#"};
-        
-        for(int i=0; i<ids.length; i++) {
-            setupKey(ids[i], labels[i], codes[i]);
-        }
+        int[] codes = {7,8,9,10,11,12,13,14,15,16,17,18};
+        for(int i=0; i<ids.length; i++) setupKey(ids[i], String.valueOf(i), codes[i], 0, false);
     }
 
-    private void setupKey(int id, final String name, final int keyCode) {
+    private void setupKey(int id, String name, int nativeCode, int jsCode, boolean useJS) {
         View v = findViewById(id);
         if (v == null) return;
         v.setOnTouchListener(new View.OnTouchListener() {
             private boolean isFirst = true;
-            private Runnable repeatAction = new Runnable() {
+            private Runnable action = new Runnable() {
                 @Override public void run() {
-                    webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keyCode));
+                    trigger(name, nativeCode, jsCode, KeyEvent.ACTION_DOWN, useJS);
                     long delay = isFirst ? INITIAL_DELAY : REPEAT_INTERVAL;
                     isFirst = false;
                     repeatHandler.postDelayed(this, delay);
@@ -118,17 +99,29 @@ public class MainActivity extends Activity {
                 if(event.getAction() == MotionEvent.ACTION_DOWN) {
                     v.setPressed(true);
                     v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-                    log("Press: " + name);
                     isFirst = true;
-                    repeatHandler.post(repeatAction);
+                    repeatHandler.post(action);
                 } else if(event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
                     v.setPressed(false);
-                    repeatHandler.removeCallbacks(repeatAction);
-                    webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, keyCode));
+                    repeatHandler.removeCallbacks(action);
+                    trigger(name, nativeCode, jsCode, KeyEvent.ACTION_UP, useJS);
                 }
                 return true;
             }
         });
+    }
+
+    private void trigger(String name, int ak, int js, int action, boolean useJS) {
+        if (useJS) {
+            String type = (action == KeyEvent.ACTION_DOWN) ? "keydown" : "keyup";
+            String script = "var e = new KeyboardEvent('"+type+"', {key:'"+name+"', keyCode:"+js+", which:"+js+", bubbles:true});" +
+                            "Object.defineProperty(e, 'keyCode', {get:function(){return "+js+";}});" +
+                            "window.dispatchEvent(e); document.dispatchEvent(e);";
+            webView.evaluateJavascript(script, null);
+        } else {
+            webView.dispatchKeyEvent(new KeyEvent(action, ak));
+        }
+        if(action == KeyEvent.ACTION_DOWN) log("Key: " + name);
     }
 
     private void log(String m) {
@@ -151,6 +144,6 @@ public class MainActivity extends Activity {
             b.compress(Bitmap.CompressFormat.PNG, 100, os);
             os.close();
             log("Saved Screenshot!");
-        } catch (Exception e) { log("Capture Failed"); }
+        } catch (Exception e) {}
     }
 }
